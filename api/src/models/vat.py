@@ -203,6 +203,27 @@ class VatReturn(Base):
         nullable=True,
         comment="When the return was submitted to HMRC (MVP: null)",
     )
+    submission_id: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+        comment="HMRC MTD submission ID / receipt ID",
+    )
+    correlation_id: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="HMRC correlation ID from fraud-prevention headers",
+    )
+    submission_status: Mapped[Optional[str]] = mapped_column(
+        String(30),
+        nullable=True,
+        comment="HMRC submission status: pending|accepted|rejected",
+    )
+    hmrc_receipt: Mapped[Optional[str]] = mapped_column(
+        String,
+        nullable=True,
+        comment="Full HMRC submission receipt JSON",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

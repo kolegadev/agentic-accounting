@@ -1,6 +1,7 @@
 """Models package."""
 
 from src.models.account import Account
+from src.models.approval import ApprovalRequest, ApprovalStep
 from src.models.bank_account import BankAccount, BankTransaction
 from src.models.invoice import CreditNote, Invoice, InvoiceLine
 from src.models.reconciliation import ReconciliationMatch, ReconciliationSession
@@ -11,6 +12,8 @@ from src.models.vat import VatAdjustment, VatPeriod, VatReturn
 
 __all__ = [
     "Account",
+    "ApprovalRequest",
+    "ApprovalStep",
     "BankAccount",
     "BankTransaction",
     "CreditNote",

@@ -7,6 +7,13 @@ from src.validators.account import (
     AccountUpdate,
     VatRateUpdate,
 )
+from src.validators.approval import (
+    ApprovalAction,
+    ApprovalCreate,
+    ApprovalListResponse,
+    ApprovalResponse,
+    ApprovalStepResponse,
+)
 from src.validators.auth import (
     MessageResponse,
     TokenResponse,
@@ -75,6 +82,13 @@ from src.validators.transaction import (
     PostingResponse,
     VATLineResponse,
 )
+from src.validators.mtd import (
+    HmrcConnectionResponse,
+    ObligationItem,
+    ObligationResponse,
+    SubmissionStatusResponse,
+    SubmitResponse,
+)
 from src.validators.vat import (
     VatAdjustmentCreate,
     VatAdjustmentResponse,
@@ -98,6 +112,11 @@ __all__ = [
     "AgedARLine",
     "AgedARReport",
     "AgingBucket",
+    "ApprovalAction",
+    "ApprovalCreate",
+    "ApprovalListResponse",
+    "ApprovalResponse",
+    "ApprovalStepResponse",
     "BSAccountLine",
     "BSSection",
     "BalanceSheetReport",
@@ -119,6 +138,8 @@ __all__ = [
     "InvoiceListResponse",
     "InvoiceResponse",
     "MessageResponse",
+    "ObligationItem",
+    "ObligationResponse",
     "PnLAccountLine",
     "PnLSection",
     "ProfitAndLossReport",
@@ -130,6 +151,9 @@ __all__ = [
     "ScheduledReportListResponse",
     "ScheduledReportResponse",
     "StreamToken",
+    "SubmissionStatusResponse",
+    "SubmitResponse",
+    "HmrcConnectionResponse",
     "TokenResponse",
     "ToolCall",
     "ToolResult",
