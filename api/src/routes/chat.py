@@ -121,6 +121,41 @@ async def get_skill(skill_id: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# POST /chat/message — REST endpoint for chat messages
+# ---------------------------------------------------------------------------
+class ChatMessageRequest(BaseModel):
+    session_id: str
+    message: str
+    persona: str = "professional"
+
+
+class ChatMessageResponse(BaseModel):
+    session_id: str
+    message: dict[str, Any]
+    tool_call: dict[str, Any]
+
+
+@router.post(
+    "/chat/message",
+    response_model=ChatMessageResponse,
+    summary="Process a chat message via REST (fallback for WS-unavailable clients)",
+)
+async def chat_message(body: ChatMessageRequest) -> ChatMessageResponse:
+    """Process a chat message through the same pipeline as the WebSocket endpoint.
+
+    This is the fallback REST endpoint used by the Chat UI when WebSocket
+    bridging is unavailable.  It returns the full pipeline result including the
+    formatted response and tool-call metadata.
+    """
+    result = await _chat_service.process_message(body.session_id, body.message)
+    return ChatMessageResponse(
+        session_id=result["session_id"],
+        message=result["message"],
+        tool_call=result["tool_call"],
+    )
+
+
+# ---------------------------------------------------------------------------
 # POST /skills/reload — reload registry from YAML
 # ---------------------------------------------------------------------------
 class ReloadResponse(BaseModel):
