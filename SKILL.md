@@ -447,6 +447,46 @@ Any MCP-compatible client can connect to `http://localhost:3112/sse` using
 the SSE transport. The `initialize`, `tools/list`, `tools/call`, and 
 `resources/list` RPC methods are fully implemented.
 
+## System Dependencies
+
+The project uses the following system-level tools:
+
+### Playwright (browser automation)
+
+Playwright provides headless Chromium for PDF generation, invoice rendering, 
+and browser automation. It is included in all Docker images and available as 
+a dev dependency.
+
+**Installation (local development):**
+```bash
+pip install playwright
+python -m playwright install chromium --with-deps
+```
+
+**Available in:**
+- `api/Dockerfile` — Chromium installed alongside WeasyPrint for PDF rendering
+- `chat-ui/Dockerfile` — Chromium for UI testing and screenshots
+- `api/pyproject.toml` — `playwright>=1.45.0` in dev dependencies
+- `chat-ui/requirements.txt` — `playwright>=1.45.0`
+
+**System packages required (apt, installed in Dockerfiles):**
+```
+libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2
+libdbus-1-3 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3
+libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2
+fonts-liberation fonts-noto-color-emoji
+```
+
+### WeasyPrint (PDF generation)
+
+Used for invoice and financial report PDF rendering.
+
+**System packages required (apt):**
+```
+libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0
+libffi-dev shared-mime-info
+```
+
 ## API Documentation
 
 Full OpenAPI documentation is available at:
