@@ -1,0 +1,966 @@
+{
+  "description": "Pre-built categorization rules for UK business bank transactions",
+  "version": "1.0.0",
+  "rules": [
+    {
+      "name": "TESCO → Groceries",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "TESCO",
+      "action_type": "set_category",
+      "action_value": "Groceries",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "SAINSBURY'S → Groceries",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "SAINSBURY",
+      "action_type": "set_category",
+      "action_value": "Groceries",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "ASDA → Groceries",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "ASDA",
+      "action_type": "set_category",
+      "action_value": "Groceries",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "MORRISONS → Groceries",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "MORRISONS",
+      "action_type": "set_category",
+      "action_value": "Groceries",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "ALDI → Groceries",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "ALDI",
+      "action_type": "set_category",
+      "action_value": "Groceries",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "LIDL → Groceries",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "LIDL",
+      "action_type": "set_category",
+      "action_value": "Groceries",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "WAITROSE → Groceries",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "WAITROSE",
+      "action_type": "set_category",
+      "action_value": "Groceries",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "CO-OP → Groceries",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "CO-OP",
+      "action_type": "set_category",
+      "action_value": "Groceries",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "AMAZON → Office Supplies",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "AMAZON",
+      "action_type": "set_category",
+      "action_value": "Office Supplies",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "VIKING DIRECT → Office Supplies",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "VIKING",
+      "action_type": "set_category",
+      "action_value": "Office Supplies",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "RYMAN → Office Supplies",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "RYMAN",
+      "action_type": "set_category",
+      "action_value": "Office Supplies",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "STRIPE → Payment Processing Fees",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "STRIPE",
+      "action_type": "set_category",
+      "action_value": "Payment Processing Fees",
+      "priority": 50,
+      "is_active": true
+    },
+    {
+      "name": "PAYPAL → Payment Processing Fees",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "PAYPAL",
+      "action_type": "set_category",
+      "action_value": "Payment Processing Fees",
+      "priority": 50,
+      "is_active": true
+    },
+    {
+      "name": "SQUARE → Payment Processing Fees",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "SQUARE",
+      "action_type": "set_category",
+      "action_value": "Payment Processing Fees",
+      "priority": 50,
+      "is_active": true
+    },
+    {
+      "name": "SUMOFUS → Payment Processing Fees",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "SUMOFUS",
+      "action_type": "set_category",
+      "action_value": "Payment Processing Fees",
+      "priority": 50,
+      "is_active": true
+    },
+    {
+      "name": "GOCARDLESS → Payment Processing Fees",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "GOCARDLESS",
+      "action_type": "set_category",
+      "action_value": "Payment Processing Fees",
+      "priority": 50,
+      "is_active": true
+    },
+    {
+      "name": "HMRC → Tax Payments",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "HMRC",
+      "action_type": "set_category",
+      "action_value": "Tax Payments",
+      "priority": 10,
+      "is_active": true
+    },
+    {
+      "name": "HMRC VAT → Tax Payments",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "HMRC VAT",
+      "action_type": "set_category",
+      "action_value": "Tax Payments",
+      "priority": 10,
+      "is_active": true
+    },
+    {
+      "name": "HMRC PAYE → Tax Payments",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "HMRC PAYE",
+      "action_type": "set_category",
+      "action_value": "Tax Payments",
+      "priority": 10,
+      "is_active": true
+    },
+    {
+      "name": "HMRC CT → Tax Payments",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "HMRC CT",
+      "action_type": "set_category",
+      "action_value": "Tax Payments",
+      "priority": 10,
+      "is_active": true
+    },
+    {
+      "name": "HMRC CORP TAX → Tax Payments",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "CORPORATION TAX",
+      "action_type": "set_category",
+      "action_value": "Tax Payments",
+      "priority": 10,
+      "is_active": true
+    },
+    {
+      "name": "SALARY → Staff Salaries",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "SALARY",
+      "action_type": "set_category",
+      "action_value": "Staff Salaries",
+      "priority": 50,
+      "is_active": true
+    },
+    {
+      "name": "WAGES → Staff Salaries",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "WAGES",
+      "action_type": "set_category",
+      "action_value": "Staff Salaries",
+      "priority": 50,
+      "is_active": true
+    },
+    {
+      "name": "PAYROLL → Staff Salaries",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "PAYROLL",
+      "action_type": "set_category",
+      "action_value": "Staff Salaries",
+      "priority": 50,
+      "is_active": true
+    },
+    {
+      "name": "PENSION → Staff Costs",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "PENSION",
+      "action_type": "set_category",
+      "action_value": "Staff Costs",
+      "priority": 50,
+      "is_active": true
+    },
+    {
+      "name": "NEST PENSION → Staff Costs",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "NEST",
+      "action_type": "set_category",
+      "action_value": "Staff Costs",
+      "priority": 50,
+      "is_active": true
+    },
+    {
+      "name": "RENT → Rent",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "RENT",
+      "action_type": "set_category",
+      "action_value": "Rent",
+      "priority": 80,
+      "is_active": true
+    },
+    {
+      "name": "GITHUB → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "GITHUB",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "GITLAB → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "GITLAB",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "AWS → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "AWS",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "AMAZON WEB SERVICES → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "AMAZON WEB SERVICES",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "DIGITALOCEAN → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "DIGITALOCEAN",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "HEROKU → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "HEROKU",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "NETLIFY → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "NETLIFY",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "VERCEL → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "VERCEL",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "GOOGLE CLOUD → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "GOOGLE CLOUD",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "AZURE → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "AZURE",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "MICROSOFT 365 → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "MICROSOFT 365",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "MICROSOFT → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "MICROSOFT",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 110,
+      "is_active": true
+    },
+    {
+      "name": "GOOGLE WORKSPACE → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "GOOGLE WORKSPACE",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "SLACK → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "SLACK",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "DROPBOX → Software & Hosting",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "DROPBOX",
+      "action_type": "set_category",
+      "action_value": "Software & Hosting",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "TRAINLINE → Travel",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "TRAINLINE",
+      "action_type": "set_category",
+      "action_value": "Travel",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "UBER → Travel",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "UBER",
+      "action_type": "set_category",
+      "action_value": "Travel",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "TFL → Travel",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "TFL",
+      "action_type": "set_category",
+      "action_value": "Travel",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "TRANSPORT FOR LONDON → Travel",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "TRANSPORT FOR LONDON",
+      "action_type": "set_category",
+      "action_value": "Travel",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "NATIONAL RAIL → Travel",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "NATIONAL RAIL",
+      "action_type": "set_category",
+      "action_value": "Travel",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "EXPEDIA → Travel",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "EXPEDIA",
+      "action_type": "set_category",
+      "action_value": "Travel",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "BOOKING.COM → Travel",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "BOOKING.COM",
+      "action_type": "set_category",
+      "action_value": "Travel",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "BRITISH AIRWAYS → Travel",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "BRITISH AIRWAYS",
+      "action_type": "set_category",
+      "action_value": "Travel",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "EASYJET → Travel",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "EASYJET",
+      "action_type": "set_category",
+      "action_value": "Travel",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "RYANAIR → Travel",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "RYANAIR",
+      "action_type": "set_category",
+      "action_value": "Travel",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "BRITISH GAS → Utilities",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "BRITISH GAS",
+      "action_type": "set_category",
+      "action_value": "Utilities",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "EDF ENERGY → Utilities",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "EDF",
+      "action_type": "set_category",
+      "action_value": "Utilities",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "EON → Utilities",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "EON",
+      "action_type": "set_category",
+      "action_value": "Utilities",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "SSE → Utilities",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "SSE",
+      "action_type": "set_category",
+      "action_value": "Utilities",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "OCTOPUS ENERGY → Utilities",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "OCTOPUS ENERGY",
+      "action_type": "set_category",
+      "action_value": "Utilities",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "THAMES WATER → Utilities",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "THAMES WATER",
+      "action_type": "set_category",
+      "action_value": "Utilities",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "SEVERN TRENT → Utilities",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "SEVERN TRENT",
+      "action_type": "set_category",
+      "action_value": "Utilities",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "WATER → Utilities",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "WATER",
+      "action_type": "set_category",
+      "action_value": "Utilities",
+      "priority": 110,
+      "is_active": true
+    },
+    {
+      "name": "ELECTRIC → Utilities",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "ELECTRIC",
+      "action_type": "set_category",
+      "action_value": "Utilities",
+      "priority": 110,
+      "is_active": true
+    },
+    {
+      "name": "BT GROUP → Utilities",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "BT GROUP",
+      "action_type": "set_category",
+      "action_value": "Utilities",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "VIRGIN MEDIA → Utilities",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "VIRGIN MEDIA",
+      "action_type": "set_category",
+      "action_value": "Utilities",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "VODAFONE → Utilities",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "VODAFONE",
+      "action_type": "set_category",
+      "action_value": "Utilities",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "EE → Utilities",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "EE ",
+      "action_type": "set_category",
+      "action_value": "Utilities",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "HISCOX → Insurance",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "HISCOX",
+      "action_type": "set_category",
+      "action_value": "Insurance",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "AVIVA → Insurance",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "AVIVA",
+      "action_type": "set_category",
+      "action_value": "Insurance",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "AXA → Insurance",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "AXA",
+      "action_type": "set_category",
+      "action_value": "Insurance",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "SIMPLY BUSINESS → Insurance",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "SIMPLY BUSINESS",
+      "action_type": "set_category",
+      "action_value": "Insurance",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "INSURANCE → Insurance",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "INSURANCE",
+      "action_type": "set_category",
+      "action_value": "Insurance",
+      "priority": 150,
+      "is_active": true
+    },
+    {
+      "name": "GOOGLE ADS → Marketing",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "GOOGLE ADS",
+      "action_type": "set_category",
+      "action_value": "Marketing",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "META ADS → Marketing",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "FACEBOOK ADS",
+      "action_type": "set_category",
+      "action_value": "Marketing",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "LINKEDIN ADS → Marketing",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "LINKEDIN ADS",
+      "action_type": "set_category",
+      "action_value": "Marketing",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "MAILCHIMP → Marketing",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "MAILCHIMP",
+      "action_type": "set_category",
+      "action_value": "Marketing",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "HUBSPOT → Marketing",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "HUBSPOT",
+      "action_type": "set_category",
+      "action_value": "Marketing",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "CANVA → Marketing",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "CANVA",
+      "action_type": "set_category",
+      "action_value": "Marketing",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "ACCOUNTANT → Professional Services",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "ACCOUNTANT",
+      "action_type": "set_category",
+      "action_value": "Professional Services",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "SOLICITOR → Professional Services",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "SOLICITOR",
+      "action_type": "set_category",
+      "action_value": "Professional Services",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "LEGAL → Professional Services",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "LEGAL",
+      "action_type": "set_category",
+      "action_value": "Professional Services",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "COMPANIES HOUSE → Professional Services",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "COMPANIES HOUSE",
+      "action_type": "set_category",
+      "action_value": "Professional Services",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "ICB → Professional Services",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "ICB",
+      "action_type": "set_category",
+      "action_value": "Professional Services",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "AAT → Professional Services",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "AAT",
+      "action_type": "set_category",
+      "action_value": "Professional Services",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "BANK FEE → Bank Charges",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "FEE",
+      "action_type": "set_category",
+      "action_value": "Bank Charges",
+      "priority": 150,
+      "is_active": true
+    },
+    {
+      "name": "BANK CHARGE → Bank Charges",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "CHARGE",
+      "action_type": "set_category",
+      "action_value": "Bank Charges",
+      "priority": 150,
+      "is_active": true
+    },
+    {
+      "name": "INTEREST PAID → Interest",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "INTEREST",
+      "action_type": "set_category",
+      "action_value": "Interest",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "APPLE → Equipment",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "APPLE",
+      "action_type": "set_category",
+      "action_value": "Equipment",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "DELL → Equipment",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "DELL",
+      "action_type": "set_category",
+      "action_value": "Equipment",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "JOHN LEWIS → Equipment",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "JOHN LEWIS",
+      "action_type": "set_category",
+      "action_value": "Equipment",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "CURRY'S → Equipment",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "CURRY",
+      "action_type": "set_category",
+      "action_value": "Equipment",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "ZOOM → Subscriptions",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "ZOOM",
+      "action_type": "set_category",
+      "action_value": "Subscriptions",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "ADOBE → Subscriptions",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "ADOBE",
+      "action_type": "set_category",
+      "action_value": "Subscriptions",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "NOTION → Subscriptions",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "NOTION",
+      "action_type": "set_category",
+      "action_value": "Subscriptions",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "MONDAY.COM → Subscriptions",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "MONDAY",
+      "action_type": "set_category",
+      "action_value": "Subscriptions",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "ASANA → Subscriptions",
+      "condition_field": "description",
+      "condition_operator": "contains",
+      "condition_value": "ASANA",
+      "action_type": "set_category",
+      "action_value": "Subscriptions",
+      "priority": 100,
+      "is_active": true
+    },
+    {
+      "name": "LARGE INCOME → Income",
+      "condition_field": "amount",
+      "condition_operator": "greater_than",
+      "condition_value": "500000",
+      "action_type": "set_category",
+      "action_value": "Income",
+      "priority": 500,
+      "is_active": true
+    },
+    {
+      "name": "LARGE EXPENSE → Expense",
+      "condition_field": "amount",
+      "condition_operator": "less_than",
+      "condition_value": "-500000",
+      "action_type": "set_category",
+      "action_value": "Expense",
+      "priority": 500,
+      "is_active": true
+    }
+  ]
+}

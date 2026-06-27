@@ -30,6 +30,13 @@ from src.validators.bank import (
     BankImportResult,
     CategorizeTransaction,
 )
+from src.validators.bank_rule import (
+    BankRuleCreate,
+    BankRuleUpdate,
+    BankRuleResponse,
+    BankRuleApplyResponse,
+    BankRuleLoadDefaultsResponse,
+)
 from src.validators.chat import (
     ConfirmationRequest,
     ErrorMessage,
@@ -122,6 +129,11 @@ __all__ = [
     "BalanceSheetReport",
     "BankAccountCreate",
     "BankAccountResponse",
+    "BankRuleApplyResponse",
+    "BankRuleCreate",
+    "BankRuleLoadDefaultsResponse",
+    "BankRuleResponse",
+    "BankRuleUpdate",
     "BankTransactionResponse",
     "BankImportResult",
     "CategorizeTransaction",

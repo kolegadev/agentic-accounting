@@ -12,6 +12,7 @@ from src.config.database import close_db_connection
 from src.routes.approvals import router as approvals_router
 from src.routes.auth import router as auth_router
 from src.routes.bank import router as bank_router
+from src.routes.bank_rules import router as bank_rules_router
 from src.routes.chat import router as chat_router
 from src.routes.coa import router as coa_router
 from src.routes.contacts import router as contacts_router
@@ -50,6 +51,7 @@ app.add_middleware(
 app.include_router(approvals_router)
 app.include_router(auth_router)
 app.include_router(bank_router)
+app.include_router(bank_rules_router)
 app.include_router(chat_router)
 app.include_router(coa_router)
 app.include_router(contacts_router)
