@@ -14,11 +14,10 @@ from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 import httpx
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-from sse_starlette.sse import EventSourceResponse
 
 from src.tool_registry import get_registry
 
@@ -410,41 +409,62 @@ async def health() -> Dict[str, str]:
 
 
 @app.get("/sse")
-async def sse_endpoint(request: Request) -> EventSourceResponse:
-    """SSE endpoint — establishes persistent connection for MCP notifications."""
+async def sse_endpoint(request: Request) -> StreamingResponse:
+    """SSE endpoint — persistent connection for MCP notifications.
 
-    async def event_stream() -> Any:
+    Uses Starlette's native StreamingResponse instead of sse-starlette
+    to avoid EventSourceResponse background-task issues with ASGI test
+    transports.  The wire protocol is identical — standard
+    ``text/event-stream`` with ``event:`` / ``data:`` fields.
+    """
+
+    async def event_stream() -> AsyncGenerator[str, None]:
         import asyncio
 
-        yield {
-            "event": "endpoint",
-            "data": json.dumps({"uri": "/message", "transport": MCP_TRANSPORT}),
-        }
+        # 1) Tell the client where to POST JSON-RPC messages
+        yield _sse_event("endpoint", json.dumps({"uri": "/message"}))
 
+        # 2) Server metadata
         registry = get_registry()
-        yield {
-            "event": "server_info",
-            "data": json.dumps({
+        yield _sse_event(
+            "server_info",
+            json.dumps({
                 "name": SERVER_NAME,
                 "version": SERVER_VERSION,
                 "tools": registry.tool_count,
                 "connected_at": datetime.now(timezone.utc).isoformat(),
             }),
-        }
+        )
 
+        # 3) Keep-alive heartbeats every 30 s
         while True:
             try:
                 if await request.is_disconnected():
                     break
-                yield {
-                    "event": "heartbeat",
-                    "data": json.dumps({"timestamp": datetime.now(timezone.utc).isoformat()}),
-                }
+                yield _sse_event(
+                    "heartbeat",
+                    json.dumps({"timestamp": datetime.now(timezone.utc).isoformat()}),
+                )
                 await asyncio.sleep(30)
+            except asyncio.CancelledError:
+                break
             except Exception:
                 break
 
-    return EventSourceResponse(event_stream())
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def _sse_event(event: str, data: str) -> str:
+    """Format a single SSE event as a wire-format string."""
+    return f"event: {event}\ndata: {data}\n\n"
 
 
 @app.post("/message")
