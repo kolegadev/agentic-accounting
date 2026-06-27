@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+import os
 import uuid
 from datetime import date, datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from src.models.account import Account
 from src.models.transaction import Posting, Transaction, VATLine
+from src.services.formance_client import formance_client, FormanceClient
 from src.validators.transaction import (
     PostingCreate,
     PostingResponse,
@@ -19,6 +22,8 @@ from src.validators.transaction import (
     TransactionResponse,
     VATLineResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +341,10 @@ class TransactionService:
 
         await db.commit()
         await db.refresh(transaction, attribute_names=["postings"])
+
+        # Post to Formance Ledger if available
+        await TransactionService._post_to_formance(db, transaction)
+
         return transaction
 
     @staticmethod
@@ -472,3 +481,75 @@ class TransactionService:
         await db.commit()
         await db.refresh(reversing_tx, attribute_names=["postings"])
         return reversing_tx
+
+    @staticmethod
+    async def _post_to_formance(
+        db: AsyncSession,
+        transaction: Transaction,
+    ) -> Optional[dict[str, Any]]:
+        """Post transaction to Formance Ledger if available.
+
+        Converts postings to Formance format:
+        - Debit postings: funds flow INTO the account (destination)
+        - Credit postings: funds flow OUT of the account (source)
+        - Amounts are converted from pence to major units (e.g., GBP)
+        """
+        if not os.getenv("FORNANCE_LEDGER_URL"):
+            return None
+
+        # Ensure accounts are loaded
+        for posting in transaction.postings:
+            if not posting.account:
+                await db.refresh(posting, attribute_names=["account"])
+
+        formance_postings: list[dict[str, Any]] = []
+        for posting in transaction.postings:
+            code = posting.account.code if posting.account else "unknown"
+            if posting.debit_amount:
+                # Debit: money enters this account (destination)
+                formance_postings.append({
+                    "source": "world",
+                    "destination": code,
+                    "amount": posting.debit_amount / 100,
+                    "asset": "GBP/2",
+                })
+            elif posting.credit_amount:
+                # Credit: money leaves this account (source)
+                formance_postings.append({
+                    "source": code,
+                    "destination": "world",
+                    "amount": posting.credit_amount / 100,
+                    "asset": "GBP/2",
+                })
+
+        if not formance_postings:
+            return None
+
+        try:
+            result = await formance_client.create_transaction(
+                ledger="main",
+                postings=formance_postings,
+                reference=transaction.reference or str(transaction.id),
+                timestamp=(
+                    transaction.recorded_at.isoformat()
+                    if transaction.recorded_at
+                    else None
+                ),
+                metadata={
+                    "transaction_id": str(transaction.id),
+                    "description": transaction.description or "",
+                },
+            )
+            logger.info(
+                "Posted transaction %s to Formance Ledger (txid=%s)",
+                transaction.reference or transaction.id,
+                result.get("txid"),
+            )
+            return result
+        except Exception as exc:
+            logger.warning(
+                "Failed to post transaction %s to Formance Ledger: %s",
+                transaction.reference or transaction.id,
+                exc,
+            )
+            return None

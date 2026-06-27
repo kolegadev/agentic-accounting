@@ -69,6 +69,45 @@ services:
       timeout: 5s
       retries: 5
 
+  formance-postgres:
+    image: postgres:16-alpine
+    container_name: accounting-formance-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-accounting}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-accounting}
+      POSTGRES_DB: formance
+    volumes:
+      - formance_data:/var/lib/postgresql/data
+    networks:
+      - accounting-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-accounting} -d formance"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  formance-ledger:
+    image: ghcr.io/formancehq/ledger:v2
+    container_name: accounting-formance
+    restart: unless-stopped
+    environment:
+      STORAGE_DRIVER: postgres
+      STORAGE_POSTGRES_CONN_STRING: >
+        postgresql://${DB_USER:-accounting}:${DB_PASSWORD:-accounting}
+        @formance-postgres:5432/formance?sslmode=disable
+    depends_on:
+      formance-postgres:
+        condition: service_healthy
+    networks:
+      - accounting-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider",
+             "http://localhost:3068/_info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   accounting-api:
     build:
       context: ./api
@@ -83,6 +122,7 @@ services:
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_PASSWORD:-minioadmin}
+      FORNANCE_LEDGER_URL: http://formance-ledger:3068
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
       - ./api:/app
@@ -93,6 +133,8 @@ services:
       redis:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      formance-ledger:
         condition: service_healthy
     networks:
       - accounting-net
