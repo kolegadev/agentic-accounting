@@ -52,6 +52,18 @@ This transport was chosen for the MVP because it works over plain HTTP, requires
 
 MVP runs entirely on `localhost`. All services are containerised and intended to run on a single machine. There is **no authentication**, **no API keys**, and **no external network calls** after initial Docker image pulls. Data never leaves the machine. This is suitable for MVP evaluation; OAuth 2.0 + PKCE will be added in Phase 2+.
 
+### Katra Cognitive Memory Integration
+
+The Agentic Accounting system also integrates with **Katra-Agentic-Memory** (Apache 2.0) — a separate cognitive memory MCP server running on port 3113. While the accounting MCP gateway exposes accounting *tools* (create transactions, run reports, etc.), Katra provides cognitive memory *primitives* (store memories, semantic search, temporal recall) that persist conversation context across agent sessions.
+
+**Two MCP servers, one system:**
+| Server | Port | Purpose |
+|--------|------|---------|
+| Accounting MCP Gateway | 3112 | 40+ accounting tools (ledger, invoicing, VAT, reports) |
+| Katra Cognitive Memory | 3113 | Episodic, semantic, knowledge graph, and temporal memory |
+
+Both speak the same MCP protocol — any MCP-compatible agent can connect to either or both. The accounting API automatically uses Katra for conversation persistence when available, falling back to Redis-only mode when unavailable.
+
 ---
 
 ## 2. Connection
@@ -1849,7 +1861,89 @@ servers:
 
 ---
 
-## 7. Tool-to-API Mapping
+## 7. Katra Memory Protocol
+
+The Katra cognitive memory server exposes 35+ MCP tools organized across four memory modalities. These are separate from the accounting tools — they handle conversation persistence, not bookkeeping operations.
+
+### 7.1 Episodic Memory
+
+| Tool | Description |
+|------|-------------|
+| `store_memory` | Store a conversation turn or event with tags, session_id, and source |
+| `get_memory` | Retrieve a specific memory by ID |
+| `temporal_recall` | Retrieve events within a time range (default: 7 days) |
+
+**Example: Store a conversation turn**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "store_memory",
+    "arguments": {
+      "content": "User asked about Q2 VAT return",
+      "user_id": "accounting-agent",
+      "category": "event",
+      "session_id": "session-abc123",
+      "source": "accounting-chat",
+      "tags": ["conversation", "vat", "user"]
+    }
+  }
+}
+```
+
+### 7.2 Semantic Search
+
+| Tool | Description |
+|------|-------------|
+| `vector_search` | Semantic search across all stored memories |
+| `add_semantic_fact` | Store a context snapshot as a searchable fact |
+
+**Example: Search for past VAT conversations**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "vector_search",
+    "arguments": {
+      "query": "VAT return calculations Q2 2025",
+      "user_id": "accounting-agent",
+      "limit": 5
+    }
+  }
+}
+```
+
+### 7.3 Knowledge Graph
+
+| Tool | Description |
+|------|-------------|
+| `explore_graph` | Query entity relationships (contacts→invoices→transactions) |
+| `add_graph_relationship` | Link two entities with a relationship type |
+
+### 7.4 Katra Connection
+
+Katra is an optional profile in the Docker Compose stack:
+```bash
+# Enable Katra
+docker compose --profile memory up -d
+
+# Katra MCP endpoint
+curl http://localhost:3113/health
+```
+
+The accounting API connects to Katra automatically when `KATRA_MCP_URL` is set. No manual configuration is required — the `ChatService` detects Katra's presence and uses it as the primary conversation persistence layer.
+
+### 7.5 Graceful Degradation
+
+If Katra is unreachable or `KATRA_ENABLED=false`, the system falls back to Redis-only conversation storage with a 1-hour TTL. No errors are raised — conversation history is simply not persisted across restarts when Katra is unavailable.
+
+---
+
+## 8. Tool-to-API Mapping
 
 The following table shows exactly how each MCP tool maps to the internal Accounting API endpoint. The gateway performs parameter mapping (renaming, path substitution, query vs body placement) transparently.
 
@@ -1898,7 +1992,7 @@ The following table shows exactly how each MCP tool maps to the internal Account
 
 ---
 
-## 8. Security
+## 9. Security
 
 ### Local Trust Model (MVP)
 
@@ -1940,7 +2034,7 @@ Planned for Phase 2 and beyond:
 
 ---
 
-## 9. Integration Examples
+## 10. Integration Examples
 
 ### Example 1: Claude Code / Claude Desktop
 

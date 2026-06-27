@@ -12,7 +12,8 @@
 2. [Installation & Setup](#2-installation--setup)
    - [2a. System Requirements](#2a-system-requirements)
    - [2b. Installation](#2b-installation)
-   - [2c. First-Time Setup](#2c-first-time-setup)
+   - [2c. Optional: Enable Cognitive Memory (Katra)](#2c-optional-enable-cognitive-memory-katra)
+   - [2d. First-Time Setup](#2d-first-time-setup)
 3. [Pathway A: User-Directed (Chat UI)](#3-pathway-a-user-directed-chat-ui)
    - [3a. Starting the Chat UI](#3a-starting-the-chat-ui)
    - [3b. Daily Bookkeeping](#3b-daily-bookkeeping)
@@ -26,12 +27,14 @@
    - [4a. Setting Up Your Agent](#4a-setting-up-your-agent)
    - [4b. MCP Tool Reference](#4b-mcp-tool-reference)
    - [4c. Agent Conversation Examples](#4c-agent-conversation-examples)
+   - [4d. Cross-Agent Memory with Katra](#4d-cross-agent-memory-with-katra)
 5. [Multi-User Setup](#5-multi-user-setup)
 6. [Approval Workflows](#6-approval-workflows)
 7. [Recurring Transactions](#7-recurring-transactions)
 8. [Bank Rules Engine](#8-bank-rules-engine)
 9. [Troubleshooting](#9-troubleshooting)
 10. [Data Privacy & Backup](#10-data-privacy--backup)
+   - [Katra Data Backup & Restore](#katra-data-backup--restore)
 11. [Uninstall](#11-uninstall)
 
 ---
@@ -116,7 +119,26 @@ curl http://localhost:3112/health
 # → {"status":"ok"}
 ```
 
-### 2c. First-Time Setup
+### 2c. Optional: Enable Cognitive Memory (Katra)
+
+Katra-Agentic-Memory provides persistent conversation context across sessions and agents. Without it, conversations are stored in Redis with a 1-hour TTL — restarting your agent loses context. With Katra, every conversation turn is persisted as an episodic event, enabling cross-agent continuity: start a conversation in Claude Code and continue it in OpenClaw or Kolega Code without losing context.
+
+**To enable Katra:**
+```bash
+docker compose --profile memory up -d
+```
+
+This adds the `katra-memory` service on port 3113 (MCP). The accounting API automatically detects Katra and uses it as the primary conversation persistence layer, with Redis as a fast cache. If Katra is unreachable, the system degrades gracefully to Redis-only mode.
+
+**Katra provides four memory types:**
+- **Episodic Memory** — stores every conversation turn (user message, assistant response, tool calls)
+- **Semantic Search** — retrieves relevant past conversations by meaning
+- **Knowledge Graph** — tracks relationships between entities (contacts, invoices, transactions)
+- **Temporal Memory** — time-series awareness for trends and deadline detection
+
+**To disable Katra:** Set `KATRA_ENABLED=false` in your environment or `.env` file.
+
+### 2d. First-Time Setup
 
 Before you can record anything, the system needs to know about your business. This setup works identically whether you use the Chat UI (Pathway A) or an AI agent (Pathway B).
 
@@ -626,6 +648,24 @@ curl -X POST http://localhost:3112/message \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
+
+### 4d. Cross-Agent Memory with Katra
+
+When Katra is enabled, your accounting conversations are automatically persisted across any MCP agent you use. This means:
+
+- Start setting up your business in **Claude Code** at your desk
+- Continue reconciling transactions in **OpenClaw** on your laptop
+- Check VAT returns via **Kolega Code** in the terminal
+
+No manual data export, no copy-paste, no cloud sync — Katra stores everything locally in MongoDB, Redis, and MinIO inside the Docker stack.
+
+**How it works:**
+1. Every conversation turn is stored as an **episodic event** in Katra (tagged with session ID and agent source)
+2. The full session context (active bank account, current VAT period, open reconciliation) is stored as a **semantic fact**
+3. When you start a new session in any agent, the ChatService queries Katra for your recent events and rebuilds the conversation state
+4. The agent picks up exactly where you left off — same history, same context, same persona
+
+**Disabling cross-agent memory:** Set `KATRA_ENABLED=false` to use Redis-only persistence (1-hour TTL, no cross-agent sharing).
 
 ### 4b. MCP Tool Reference
 
@@ -1309,6 +1349,29 @@ curl http://localhost:3112/health
 ### UK VAT Data Retention
 
 HMRC requires VAT records to be kept for **6 years**. The system stores all VAT data with full MTD digital-link audit trails. Periodically back up your database to comply with this requirement.
+
+### Katra Data Backup & Restore
+
+Katra stores conversation data in:
+- **MongoDB** — episodic events and semantic facts
+- **Redis** — working memory caches
+- **MinIO** — knowledge graph snapshots and assets
+
+**Backup Katra data:**
+```bash
+# MongoDB dump
+docker exec accounting-katra mongodump --out /data/backup
+docker cp accounting-katra:/data/backup ./katra-backup
+
+# Or just back up the Docker volume
+docker run --rm -v accounting_katra_data:/data -v $(pwd):/backup alpine tar czf /backup/katra-data.tar.gz -C /data .
+```
+
+**Restore Katra data:**
+```bash
+docker run --rm -v accounting_katra_data:/data -v $(pwd):/backup alpine tar xzf /backup/katra-data.tar.gz -C /data
+docker compose --profile memory restart katra-memory
+```
 
 ---
 
