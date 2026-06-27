@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.config.database import close_db_connection
+from src.routes.auth import router as auth_router
 from src.routes.bank import router as bank_router
 from src.routes.chat import router as chat_router
 from src.routes.coa import router as coa_router
@@ -44,6 +45,7 @@ app.add_middleware(
 )
 
 # ---- Routers ---------------------------------------------------------------
+app.include_router(auth_router)
 app.include_router(bank_router)
 app.include_router(chat_router)
 app.include_router(coa_router)

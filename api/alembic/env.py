@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from src.config.database import Base
 from src.models.account import Account  # noqa: F401 — ensure models are loaded
 from src.models.transaction import Posting, Transaction, VATLine  # noqa: F401 — ensure models are loaded
+from src.models.user import User  # noqa: F401 — ensure models are loaded
 
 # Alembic Config object
 config = context.config

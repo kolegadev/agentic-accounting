@@ -6,6 +6,7 @@ from src.models.invoice import CreditNote, Invoice, InvoiceLine
 from src.models.reconciliation import ReconciliationMatch, ReconciliationSession
 from src.models.report import ReportTemplate, ScheduledReport
 from src.models.transaction import Posting, Transaction, VATLine
+from src.models.user import User
 from src.models.vat import VatAdjustment, VatPeriod, VatReturn
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "ReportTemplate",
     "ScheduledReport",
     "Transaction",
+    "User",
     "VatAdjustment",
     "VATLine",
     "VatPeriod",
