@@ -6,12 +6,10 @@ from datetime import datetime, timezone
 
 import pytest
 
-# Set a dummy DATABASE_URL BEFORE any model imports so the database module
-# sees it at import time. Tests that mock the service layer never actually connect.
-os.environ.setdefault(
-    "DATABASE_URL",
-    "postgresql+asyncpg://test:test@localhost:5432/test_db",
-)
+# Set DATABASE_URL in environ BEFORE any imports from src.config.database.
+# The get_engine() function reads directly from os.environ at call time
+# (not at module-import time), so this works for all test files.
+os.environ["DATABASE_URL"] = "postgresql+asyncpg://test:test@localhost:5432/test_db"
 
 from src.models.account import Account
 
@@ -30,6 +28,8 @@ def sample_account() -> Account:
         vat_rate=None,
         parent_id=None,
         is_active=True,
+        created_at=NOW,
+        updated_at=NOW,
     )
 
 

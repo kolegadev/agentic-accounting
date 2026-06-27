@@ -17,6 +17,7 @@ from src.services.coa_service import (
     TemplateNotFoundError,
 )
 from src.validators.account import AccountCreate, AccountUpdate
+from tests.conftest import NOW
 
 
 # ---------------------------------------------------------------------------
@@ -25,9 +26,27 @@ from src.validators.account import AccountCreate, AccountUpdate
 
 @pytest.fixture
 def mock_db() -> AsyncMock:
-    """Return an AsyncMock that behaves like an async SQLAlchemy session."""
+    """Return an AsyncMock that behaves like an async SQLAlchemy session.
+
+    The refresh mock populates server-default fields (id, created_at, updated_at,
+    is_active) that would normally be set by the database, so that Pydantic
+    serialisation works correctly.
+    """
     db = AsyncMock()
     db.add = MagicMock()
+    db.commit = AsyncMock()
+
+    async def _refresh(obj: object) -> None:
+        if hasattr(obj, "id") and obj.id is None:
+            obj.id = uuid.uuid4()  # type: ignore[attr-defined]
+        if hasattr(obj, "is_active") and obj.is_active is None:
+            obj.is_active = True  # type: ignore[attr-defined]
+        if hasattr(obj, "created_at") and obj.created_at is None:
+            obj.created_at = NOW  # type: ignore[attr-defined]
+        if hasattr(obj, "updated_at") and obj.updated_at is None:
+            obj.updated_at = NOW  # type: ignore[attr-defined]
+
+    db.refresh = _refresh
     return db
 
 
@@ -43,6 +62,8 @@ def sample_account_obj() -> Account:
         vat_rate=None,
         parent_id=None,
         is_active=True,
+        created_at=NOW,
+        updated_at=NOW,
     )
 
 
@@ -53,7 +74,7 @@ def sample_account_obj() -> Account:
 @pytest.mark.asyncio
 async def test_list_accounts_active_only(mock_db: AsyncMock) -> None:
     """Should return only active accounts when include_inactive=False."""
-    active = Account(id=uuid.uuid4(), code="1000", name="Bank", category="Asset", type="Bank", vat_rate=None, is_active=True)
+    active = Account(id=uuid.uuid4(), code="1000", name="Bank", category="Asset", type="Bank", vat_rate=None, is_active=True, created_at=NOW, updated_at=NOW)
 
     mock_result = MagicMock()
     mock_result.scalars.return_value.all.return_value = [active]
@@ -67,8 +88,8 @@ async def test_list_accounts_active_only(mock_db: AsyncMock) -> None:
 @pytest.mark.asyncio
 async def test_list_accounts_include_inactive(mock_db: AsyncMock) -> None:
     """Should return ALL accounts when include_inactive=True."""
-    acc1 = Account(id=uuid.uuid4(), code="1000", name="Bank", category="Asset", type="Bank", vat_rate=None, is_active=True)
-    acc2 = Account(id=uuid.uuid4(), code="2000", name="Loan", category="Liability", type="CurrentLiability", vat_rate=None, is_active=False)
+    acc1 = Account(id=uuid.uuid4(), code="1000", name="Bank", category="Asset", type="Bank", vat_rate=None, is_active=True, created_at=NOW, updated_at=NOW)
+    acc2 = Account(id=uuid.uuid4(), code="2000", name="Loan", category="Liability", type="CurrentLiability", vat_rate=None, is_active=False, created_at=NOW, updated_at=NOW)
 
     mock_result = MagicMock()
     mock_result.scalars.return_value.all.return_value = [acc1, acc2]
@@ -147,7 +168,6 @@ async def test_create_account_success(mock_db: AsyncMock) -> None:
 
     mock_db.execute.return_value = mock_result_check
     mock_db.commit = AsyncMock()
-    mock_db.refresh = AsyncMock()
 
     result = await CoaService.create_account(mock_db, data)
     assert result.code == "5210"
@@ -160,7 +180,7 @@ async def test_create_account_duplicate_code(mock_db: AsyncMock) -> None:
     """Should raise DuplicateCodeError for duplicate code."""
     data = AccountCreate(code="1000", name="Bank", category="Asset", type="Bank", vat_rate=None)
 
-    existing = Account(id=uuid.uuid4(), code="1000", name="Existing", category="Asset", type="Bank", is_active=True)
+    existing = Account(id=uuid.uuid4(), code="1000", name="Existing", category="Asset", type="Bank", is_active=True, created_at=NOW, updated_at=NOW)
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = existing
     mock_db.execute.return_value = mock_result
@@ -173,16 +193,12 @@ async def test_create_account_duplicate_code(mock_db: AsyncMock) -> None:
 
 @pytest.mark.asyncio
 async def test_create_account_invalid_code_range(mock_db: AsyncMock) -> None:
-    """Should raise InvalidCodeRangeError for code outside category range."""
-    data = AccountCreate(code="9999", name="Invalid", category="Asset", type="Bank", vat_rate=None)
-
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = None
-    mock_db.execute.return_value = mock_result
-
-    with pytest.raises(InvalidCodeRangeError) as exc_info:
-        await CoaService.create_account(mock_db, data)
-    assert exc_info.value.status_code == 422
+    """Should reject code outside category range (Pydantic validation)."""
+    # Pydantic model_validator catches this before it reaches the service.
+    # The code 9999 is not in the Asset range (1000-1999).
+    with pytest.raises(Exception) as exc_info:
+        AccountCreate(code="9999", name="Invalid", category="Asset", type="Bank", vat_rate=None)
+    assert "9999" in str(exc_info.value) or "valid range" in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +214,6 @@ async def test_update_account_success(mock_db: AsyncMock, sample_account_obj: Ac
     mock_result.scalar_one_or_none.return_value = sample_account_obj
     mock_db.execute.return_value = mock_result
     mock_db.commit = AsyncMock()
-    mock_db.refresh = AsyncMock()
 
     result = await CoaService.update_account(mock_db, sample_account_obj.id, data)
     assert result.name == "Updated Bank Account"
@@ -221,7 +236,7 @@ async def test_update_account_not_found(mock_db: AsyncMock) -> None:
 @pytest.mark.asyncio
 async def test_update_account_code_range_violation(mock_db: AsyncMock) -> None:
     """Should raise InvalidCodeRangeError when new category conflicts with code."""
-    acc = Account(id=uuid.uuid4(), code="1000", name="Bank", category="Asset", type="Bank", is_active=True)
+    acc = Account(id=uuid.uuid4(), code="1000", name="Bank", category="Asset", type="Bank", is_active=True, created_at=NOW, updated_at=NOW)
     data = AccountUpdate(category="Liability")  # 1000 is NOT in Liability range
 
     mock_result = MagicMock()
@@ -244,7 +259,6 @@ async def test_soft_delete_account_success(mock_db: AsyncMock, sample_account_ob
     mock_result.scalar_one_or_none.return_value = sample_account_obj
     mock_db.execute.return_value = mock_result
     mock_db.commit = AsyncMock()
-    mock_db.refresh = AsyncMock()
 
     result = await CoaService.soft_delete_account(mock_db, sample_account_obj.id)
     assert result.is_active is False
@@ -272,7 +286,6 @@ async def test_set_vat_rate_success(mock_db: AsyncMock, sample_account_obj: Acco
     mock_result.scalar_one_or_none.return_value = sample_account_obj
     mock_db.execute.return_value = mock_result
     mock_db.commit = AsyncMock()
-    mock_db.refresh = AsyncMock()
 
     result = await CoaService.set_vat_rate(mock_db, sample_account_obj.id, "20%")
     assert result.vat_rate == "20%"
@@ -321,7 +334,6 @@ async def test_load_template_success(mock_db: AsyncMock) -> None:
     mock_result.scalar_one_or_none.return_value = None
     mock_db.execute.return_value = mock_result
     mock_db.commit = AsyncMock()
-    mock_db.refresh = AsyncMock()
 
     with (
         patch("src.services.coa_service.Path.exists", return_value=True),

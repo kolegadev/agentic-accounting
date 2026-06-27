@@ -9,11 +9,6 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-DATABASE_URL: str = os.getenv(
-    "DATABASE_URL",
-    "",
-)
-
 _engine: AsyncEngine | None = None
 _async_session_factory: async_sessionmaker[AsyncSession] | None = None
 
@@ -22,7 +17,7 @@ def get_engine() -> AsyncEngine:
     """Return the async engine, creating it lazily on first call."""
     global _engine
     if _engine is None:
-        url = DATABASE_URL
+        url = os.getenv("DATABASE_URL", "")
         if not url:
             raise RuntimeError("DATABASE_URL environment variable is not set")
         _engine = create_async_engine(
