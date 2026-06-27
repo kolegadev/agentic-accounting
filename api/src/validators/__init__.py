@@ -51,6 +51,14 @@ from src.validators.contact import (
     ContactUpdate,
     ContactListResponse,
 )
+from src.validators.document import (
+    ConfirmExtractionRequest,
+    DocumentListResponse,
+    DocumentResponse,
+    DocumentUploadResponse,
+    ExtractionLineItem,
+    ExtractionResult,
+)
 from src.validators.invoice import (
     CreditNoteResponse,
     InvoiceCreate,
@@ -96,6 +104,14 @@ from src.validators.mtd import (
     SubmissionStatusResponse,
     SubmitResponse,
 )
+from src.validators.open_banking import (
+    ConnectAccountRequest,
+    ConnectionResponse,
+    ConnectionStatusResponse,
+    ProviderResponse,
+    SyncAllResponse,
+    SyncResponse,
+)
 from src.validators.vat import (
     VatAdjustmentCreate,
     VatAdjustmentResponse,
@@ -130,6 +146,9 @@ __all__ = [
     "BankAccountCreate",
     "BankAccountResponse",
     "BankRuleApplyResponse",
+    "ConnectAccountRequest",
+    "ConnectionResponse",
+    "ConnectionStatusResponse",
     "BankRuleCreate",
     "BankRuleLoadDefaultsResponse",
     "BankRuleResponse",
@@ -142,8 +161,14 @@ __all__ = [
     "ContactResponse",
     "ContactUpdate",
     "ContactListResponse",
+    "ConfirmExtractionRequest",
     "CreditNoteResponse",
+    "DocumentListResponse",
+    "DocumentResponse",
+    "DocumentUploadResponse",
     "ErrorMessage",
+    "ExtractionLineItem",
+    "ExtractionResult",
     "InvoiceCreate",
     "InvoiceLineCreate",
     "InvoiceLineResponse",
@@ -174,6 +199,9 @@ __all__ = [
     "TransactionListResponse",
     "PostingCreate",
     "PostingResponse",
+    "ProviderResponse",
+    "SyncAllResponse",
+    "SyncResponse",
     "TrialBalanceLine",
     "TrialBalanceReport",
     "UserCreate",

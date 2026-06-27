@@ -16,7 +16,9 @@ from src.routes.bank_rules import router as bank_rules_router
 from src.routes.chat import router as chat_router
 from src.routes.coa import router as coa_router
 from src.routes.contacts import router as contacts_router
+from src.routes.documents import router as documents_router
 from src.routes.invoices import router as invoices_router
+from src.routes.open_banking import router as open_banking_router
 from src.routes.mtd import router as mtd_router
 from src.routes.reconciliation import router as reconciliation_router
 from src.routes.recurring import router as recurring_router
@@ -56,8 +58,10 @@ app.include_router(bank_rules_router)
 app.include_router(chat_router)
 app.include_router(coa_router)
 app.include_router(contacts_router)
+app.include_router(documents_router)
 app.include_router(invoices_router)
 app.include_router(mtd_router)
+app.include_router(open_banking_router)
 app.include_router(reconciliation_router)
 app.include_router(recurring_router)
 app.include_router(reports_router)

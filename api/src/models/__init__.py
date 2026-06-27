@@ -4,6 +4,7 @@ from src.models.account import Account
 from src.models.approval import ApprovalRequest, ApprovalStep
 from src.models.bank_account import BankAccount, BankTransaction
 from src.models.bank_rule import BankRule
+from src.models.document import Document
 from src.models.invoice import CreditNote, Invoice, InvoiceLine
 from src.models.reconciliation import ReconciliationMatch, ReconciliationSession
 from src.models.report import ReportTemplate, ScheduledReport
@@ -20,6 +21,7 @@ __all__ = [
     "BankRule",
     "BankTransaction",
     "CreditNote",
+    "Document",
     "Invoice",
     "InvoiceLine",
     "Posting",
