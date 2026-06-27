@@ -1,0 +1,14 @@
+{
+  "name": "Revolut",
+  "description": "Revolut Business Account CSV export",
+  "date_format": "%Y-%m-%d",
+  "column_mappings": {
+    "date": "Started Date",
+    "description": "Description",
+    "amount": "Amount",
+    "debit": null,
+    "credit": null,
+    "reference": "Reference",
+    "type": "Type"
+  }
+}

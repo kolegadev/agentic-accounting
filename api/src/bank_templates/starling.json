@@ -1,0 +1,14 @@
+{
+  "name": "Starling",
+  "description": "Starling Bank Business Current Account CSV export",
+  "date_format": "%d/%m/%Y",
+  "column_mappings": {
+    "date": "Date",
+    "description": "Counter Party",
+    "amount": "Amount (GBP)",
+    "debit": null,
+    "credit": null,
+    "reference": "Reference",
+    "type": "Transaction Type"
+  }
+}

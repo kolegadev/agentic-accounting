@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice {{ invoice.reference or 'Draft' }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            font-size: 11pt;
+            color: #1a1a1a;
+            line-height: 1.4;
+        }
+
+        /* ---- Header ---- */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2em;
+        }
+        .company-info {
+            flex: 1;
+        }
+        .company-info h1 {
+            font-size: 18pt;
+            margin: 0 0 0.25em;
+            color: #2563eb;
+        }
+        .company-info p {
+            margin: 0.15em 0;
+            color: #4b5563;
+        }
+        .invoice-meta {
+            text-align: right;
+        }
+        .invoice-meta h2 {
+            font-size: 24pt;
+            margin: 0 0 0.25em;
+            color: #2563eb;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .invoice-meta table {
+            margin-left: auto;
+            font-size: 9pt;
+        }
+        .invoice-meta td {
+            padding: 2px 0;
+        }
+        .invoice-meta td.label {
+            text-align: right;
+            color: #6b7280;
+            padding-right: 1em;
+            font-weight: 600;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 9pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-top: 0.5em;
+        }
+        .status-draft { background: #fef3c7; color: #92400e; }
+        .status-sent { background: #dbeafe; color: #1e40af; }
+        .status-viewed { background: #e0e7ff; color: #3730a3; }
+        .status-paid { background: #d1fae5; color: #065f46; }
+        .status-overdue { background: #fee2e2; color: #991b1b; }
+        .status-cancelled { background: #f3f4f6; color: #6b7280; }
+
+        /* ---- Addresses ---- */
+        .addresses {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2em;
+            padding: 1em 0;
+            border-top: 1px solid #e5e7eb;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .address-box {
+            flex: 1;
+        }
+        .address-box h3 {
+            font-size: 9pt;
+            text-transform: uppercase;
+            color: #6b7280;
+            margin: 0 0 0.5em;
+            letter-spacing: 0.5px;
+        }
+        .address-box p {
+            margin: 0.15em 0;
+            font-size: 10pt;
+        }
+
+        /* ---- Line Items ---- */
+        table.line-items {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5em;
+        }
+        table.line-items thead th {
+            background: #f9fafb;
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 9pt;
+            text-transform: uppercase;
+            color: #6b7280;
+            border-bottom: 2px solid #e5e7eb;
+            letter-spacing: 0.5px;
+        }
+        table.line-items tbody td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 10pt;
+            vertical-align: top;
+        }
+        table.line-items .col-description { width: 45%; }
+        table.line-items .col-vat { text-align: center; width: 10%; }
+        table.line-items .col-qty { text-align: center; width: 8%; }
+        table.line-items .col-unit { text-align: right; width: 12%; }
+        table.line-items .col-net { text-align: right; width: 12%; }
+        table.line-items .col-vat-amount { text-align: right; width: 13%; }
+
+        /* ---- Totals ---- */
+        .totals {
+            margin-left: auto;
+            width: 40%;
+            margin-bottom: 2em;
+        }
+        .totals table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .totals td {
+            padding: 6px 12px;
+            font-size: 10pt;
+        }
+        .totals td.label {
+            text-align: right;
+            color: #6b7280;
+        }
+        .totals td.value {
+            text-align: right;
+            font-weight: 600;
+        }
+        .totals .subtotal td {
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .totals .vat td {
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 9pt;
+            color: #6b7280;
+        }
+        .totals .grand-total td {
+            font-size: 13pt;
+            font-weight: 700;
+            color: #2563eb;
+            padding-top: 10px;
+        }
+
+        /* ---- Notes ---- */
+        .notes {
+            padding: 1em;
+            background: #f9fafb;
+            border-radius: 6px;
+            font-size: 9pt;
+            color: #6b7280;
+            margin-bottom: 2em;
+        }
+        .notes h3 {
+            font-size: 9pt;
+            text-transform: uppercase;
+            margin: 0 0 0.5em;
+            color: #4b5563;
+            letter-spacing: 0.5px;
+        }
+
+        /* ---- Footer ---- */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 2cm;
+            right: 2cm;
+            text-align: center;
+            font-size: 8pt;
+            color: #9ca3af;
+            padding-top: 1em;
+            border-top: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="company-info">
+            <h1>{{ company_name | default('Agentic Accounting Ltd') }}</h1>
+            <p>{{ company_address_line1 | default('71-75 Shelton Street') }}</p>
+            <p>{{ company_address_city | default('London, WC2H 9JQ') }}</p>
+            <p>{{ company_country | default('United Kingdom') }}</p>
+            {% if company_vat %}<p>VAT: {{ company_vat }}</p>{% endif %}
+            {% if company_email %}<p>{{ company_email }}</p>{% endif %}
+        </div>
+        <div class="invoice-meta">
+            <h2>INVOICE</h2>
+            <table>
+                <tr>
+                    <td class="label">Reference</td>
+                    <td><strong>{{ invoice.reference or 'DRAFT' }}</strong></td>
+                </tr>
+                <tr>
+                    <td class="label">Issue Date</td>
+                    <td>{{ invoice.issue_date.strftime('%d %b %Y') }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Due Date</td>
+                    <td>{{ invoice.due_date.strftime('%d %b %Y') }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Currency</td>
+                    <td>{{ invoice.currency }}</td>
+                </tr>
+            </table>
+            <div class="status-badge status-{{ invoice.status }}">
+                {{ invoice.status | upper }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Addresses -->
+    <div class="addresses">
+        <div class="address-box">
+            <h3>Bill To</h3>
+            <p><strong>{{ invoice.contact.name if invoice.contact else 'N/A' }}</strong></p>
+            {% if invoice.contact %}
+                {% if invoice.contact.company %}<p>{{ invoice.contact.company }}</p>{% endif %}
+                {% if invoice.contact.address_line1 %}<p>{{ invoice.contact.address_line1 }}</p>{% endif %}
+                {% if invoice.contact.address_line2 %}<p>{{ invoice.contact.address_line2 }}</p>{% endif %}
+                {% if invoice.contact.city or invoice.contact.postcode %}
+                <p>
+                    {% if invoice.contact.city %}{{ invoice.contact.city }}{% endif %}
+                    {% if invoice.contact.postcode %}, {{ invoice.contact.postcode }}{% endif %}
+                </p>
+                {% endif %}
+                {% if invoice.contact.country %}<p>{{ invoice.contact.country }}</p>{% endif %}
+                {% if invoice.contact.vat_number %}<p>VAT: {{ invoice.contact.vat_number }}</p>{% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Line Items -->
+    <table class="line-items">
+        <thead>
+            <tr>
+                <th class="col-description">Description</th>
+                <th class="col-vat">VAT Rate</th>
+                <th class="col-qty">Qty</th>
+                <th class="col-unit">Unit Price</th>
+                <th class="col-net">Net</th>
+                <th class="col-vat-amount">VAT</th>
+                <th class="col-net">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for line in invoice.lines %}
+            <tr>
+                <td class="col-description">{{ line.description }}</td>
+                <td class="col-vat">{{ line.vat_rate }}</td>
+                <td class="col-qty">{{ line.quantity }}</td>
+                <td class="col-unit">&pound;{{ pence_to_pounds(line.unit_price) }}</td>
+                <td class="col-net">&pound;{{ pence_to_pounds(line.unit_price * line.quantity) }}</td>
+                <td class="col-vat-amount">&pound;{{ pence_to_pounds(line.vat_amount) }}</td>
+                <td class="col-net">&pound;{{ pence_to_pounds(line.line_total) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Totals -->
+    <div class="totals">
+        <table>
+            <tr class="subtotal">
+                <td class="label">Subtotal</td>
+                <td class="value">&pound;{{ pence_to_pounds(invoice.subtotal) }}</td>
+            </tr>
+            <tr class="vat">
+                <td class="label">VAT</td>
+                <td class="value">&pound;{{ pence_to_pounds(invoice.vat_total) }}</td>
+            </tr>
+            <tr class="grand-total">
+                <td class="label">Total</td>
+                <td class="value">&pound;{{ pence_to_pounds(invoice.total) }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Notes -->
+    {% if invoice.notes %}
+    <div class="notes">
+        <h3>Notes / Payment Instructions</h3>
+        <p>{{ invoice.notes }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Footer -->
+    <div class="footer">
+        {{ company_name | default('Agentic Accounting Ltd') }} &mdash;
+        {{ company_address_line1 | default('71-75 Shelton Street') }},
+        {{ company_address_city | default('London, WC2H 9JQ') }} &mdash;
+        {{ company_country | default('United Kingdom') }}
+        {% if company_vat %} &mdash; VAT: {{ company_vat }}{% endif %}
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "HSBC",
+  "description": "HSBC Business Current Account CSV export",
+  "date_format": "%d %b %Y",
+  "column_mappings": {
+    "date": "Date",
+    "description": "Description",
+    "amount": "Amount",
+    "debit": null,
+    "credit": null,
+    "reference": "Reference",
+    "type": "Money out / Money in"
+  }
+}

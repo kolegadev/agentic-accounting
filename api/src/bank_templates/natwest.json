@@ -1,0 +1,14 @@
+{
+  "name": "NatWest",
+  "description": "NatWest Bankline CSV export",
+  "date_format": "%d/%m/%Y",
+  "column_mappings": {
+    "date": "Date",
+    "description": "Narrative",
+    "amount": "Value",
+    "debit": null,
+    "credit": null,
+    "reference": "Reference",
+    "type": "Type"
+  }
+}

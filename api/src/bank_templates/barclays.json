@@ -1,0 +1,14 @@
+{
+  "name": "Barclays",
+  "description": "Barclays Business Current Account CSV export",
+  "date_format": "%d/%m/%Y",
+  "column_mappings": {
+    "date": "Date",
+    "description": "Description",
+    "amount": "Amount",
+    "debit": null,
+    "credit": null,
+    "reference": "Reference",
+    "type": "Type"
+  }
+}

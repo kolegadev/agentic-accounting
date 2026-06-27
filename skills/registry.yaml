@@ -1,0 +1,528 @@
+# Skill Registry — all 25+ SKILLs (MCP tools) available to the LLM.
+# Each entry maps a natural-language intent to a specific API operation.
+
+- id: "coa.list"
+  category: "COA"
+  name: "List Chart of Accounts"
+  description: "Use when the user wants to see all accounts in their chart of accounts, or asks 'what accounts do I have'."
+  inputSchema:
+    type: object
+    properties:
+      include_inactive: {type: boolean, default: false}
+  example: "Show me my chart of accounts"
+
+- id: "coa.add_account"
+  category: "COA"
+  name: "Add Account"
+  description: "Use when the user wants to create a new account in the chart of accounts."
+  inputSchema:
+    type: object
+    properties:
+      code: {type: string, description: "Account code (e.g. 5210)"}
+      name: {type: string, description: "Account name"}
+      category: {type: string, enum: ["Asset","Liability","Equity","Revenue","Expense"]}
+      type: {type: string, description: "Account type (e.g. Bank, Expense, CurrentAsset)"}
+      vat_rate: {type: string, enum: ["20%","5%","0%","exempt"]}
+      parent_id: {type: string, format: uuid}
+    required: [code, name, category, type]
+  example: "Add a new expense account 5210 for Marketing"
+
+- id: "coa.edit_account"
+  category: "COA"
+  name: "Edit Account"
+  description: "Use when the user wants to update an existing account's name, code, category, or other fields."
+  inputSchema:
+    type: object
+    properties:
+      account_id: {type: string, format: uuid}
+      code: {type: string}
+      name: {type: string}
+      category: {type: string, enum: ["Asset","Liability","Equity","Revenue","Expense"]}
+      type: {type: string}
+      is_active: {type: boolean}
+    required: [account_id]
+  example: "Rename account 5210 to 'Digital Marketing'"
+
+- id: "coa.set_vat_rate"
+  category: "COA"
+  name: "Set VAT Rate on Account"
+  description: "Use when the user wants to change the default VAT rate on an account."
+  inputSchema:
+    type: object
+    properties:
+      account_id: {type: string, format: uuid}
+      vat_rate: {type: string, enum: ["20%","5%","0%","exempt"]}
+    required: [account_id, vat_rate]
+  example: "Set VAT rate to 20% on the marketing account"
+
+- id: "gl.record_expense"
+  category: "GL"
+  name: "Record Expense"
+  description: "Use when the user has paid for something and wants to record it as a business expense."
+  inputSchema:
+    type: object
+    properties:
+      description: {type: string}
+      amount: {type: integer}
+      vat_rate: {type: string, enum: ["20%","5%","0%","exempt"]}
+      contact: {type: string}
+      date: {type: string}
+    required: [description, amount]
+  example: "Paid £50 for office supplies at Tesco"
+
+- id: "gl.record_income"
+  category: "GL"
+  name: "Record Income"
+  description: "Use when the user received payment from a client or recorded revenue."
+  inputSchema:
+    type: object
+    properties:
+      description: {type: string}
+      amount: {type: integer}
+      vat_rate: {type: string, enum: ["20%","5%","0%","exempt"]}
+      contact: {type: string}
+      date: {type: string}
+    required: [description, amount]
+  example: "Received £1,200 from Acme Ltd for consulting"
+
+- id: "gl.record_transfer"
+  category: "GL"
+  name: "Record Transfer"
+  description: "Use when the user wants to record a transfer between bank accounts."
+  inputSchema:
+    type: object
+    properties:
+      from_account: {type: string}
+      to_account: {type: string}
+      amount: {type: integer}
+      date: {type: string}
+      description: {type: string}
+    required: [from_account, to_account, amount]
+  example: "Transfer £500 from current account to savings"
+
+- id: "gl.journal_entry"
+  category: "GL"
+  name: "Create Journal Entry"
+  description: "Use when the user wants to record a manual journal entry with debits and credits."
+  inputSchema:
+    type: object
+    properties:
+      date: {type: string}
+      reference: {type: string}
+      description: {type: string}
+      postings:
+        type: array
+        items:
+          type: object
+          properties:
+            account_id: {type: string, format: uuid}
+            amount: {type: integer}
+            side: {type: string, enum: ["debit","credit"]}
+    required: [date, postings]
+  example: "Create a journal entry to correct depreciation"
+
+- id: "gl.list_transactions"
+  category: "GL"
+  name: "List Transactions"
+  description: "Use when the user wants to browse or search recent transactions."
+  inputSchema:
+    type: object
+    properties:
+      start_date: {type: string}
+      end_date: {type: string}
+      account_id: {type: string, format: uuid}
+      contact_id: {type: string, format: uuid}
+      limit: {type: integer, default: 50}
+    example: "Show me all transactions from last month"
+
+- id: "gl.transaction_detail"
+  category: "GL"
+  name: "Transaction Detail"
+  description: "Use when the user asks for details about a specific transaction."
+  inputSchema:
+    type: object
+    properties:
+      transaction_id: {type: string, format: uuid}
+    required: [transaction_id]
+  example: "Show me the details of transaction TXN-001"
+
+- id: "gl.undo_transaction"
+  category: "GL"
+  name: "Undo Transaction"
+  description: "Use when the user wants to reverse or delete a previously recorded transaction."
+  inputSchema:
+    type: object
+    properties:
+      transaction_id: {type: string, format: uuid}
+    required: [transaction_id]
+  example: "Undo the last expense I recorded"
+
+- id: "contact.create"
+  category: "Contact"
+  name: "Create Contact"
+  description: "Use when the user wants to add a new customer, supplier, or other contact."
+  inputSchema:
+    type: object
+    properties:
+      name: {type: string}
+      type: {type: string, enum: ["customer","supplier","both","other"]}
+      email: {type: string, format: email}
+      phone: {type: string}
+      address_line1: {type: string}
+      city: {type: string}
+      postcode: {type: string}
+      notes: {type: string}
+    required: [name, type]
+  example: "Add a new supplier called 'Office Supplies Ltd'"
+
+- id: "contact.edit"
+  category: "Contact"
+  name: "Edit Contact"
+  description: "Use when the user wants to update an existing contact's details."
+  inputSchema:
+    type: object
+    properties:
+      contact_id: {type: string, format: uuid}
+      name: {type: string}
+      type: {type: string, enum: ["customer","supplier","both","other"]}
+      email: {type: string, format: email}
+      phone: {type: string}
+    required: [contact_id]
+  example: "Update Acme Ltd's phone number to 020 7946 0000"
+
+- id: "contact.list"
+  category: "Contact"
+  name: "List Contacts"
+  description: "Use when the user wants to see all contacts or filter by type."
+  inputSchema:
+    type: object
+    properties:
+      type: {type: string, enum: ["customer","supplier","both","other"]}
+      search: {type: string}
+    example: "Show me all my customers"
+
+- id: "contact.detail"
+  category: "Contact"
+  name: "Contact Detail"
+  description: "Use when the user wants full details about a specific contact."
+  inputSchema:
+    type: object
+    properties:
+      contact_id: {type: string, format: uuid}
+    required: [contact_id]
+  example: "Tell me about Acme Ltd"
+
+- id: "contact.archive"
+  category: "Contact"
+  name: "Archive Contact"
+  description: "Use when the user wants to archive (soft-delete) a contact."
+  inputSchema:
+    type: object
+    properties:
+      contact_id: {type: string, format: uuid}
+    required: [contact_id]
+  example: "Archive the old supplier XYZ Corp"
+
+- id: "bank.import_csv"
+  category: "Bank"
+  name: "Import Bank CSV"
+  description: "Use when the user wants to import a CSV bank statement."
+  inputSchema:
+    type: object
+    properties:
+      bank_account_id: {type: string, format: uuid}
+      file_path: {type: string}
+      format: {type: string, enum: ["auto","monzo","revolut","starling","hsbc","generic"], default: "auto"}
+    required: [bank_account_id]
+  example: "Import my Monzo bank statement CSV"
+
+- id: "bank.import_ofx"
+  category: "Bank"
+  name: "Import Bank OFX"
+  description: "Use when the user wants to import an OFX/QFX bank statement."
+  inputSchema:
+    type: object
+    properties:
+      bank_account_id: {type: string, format: uuid}
+      file_path: {type: string}
+    required: [bank_account_id]
+  example: "Import my HSBC OFX statement"
+
+- id: "bank.list_accounts"
+  category: "Bank"
+  name: "List Bank Accounts"
+  description: "Use when the user wants to see their connected bank accounts."
+  inputSchema:
+    type: object
+    properties: {}
+  example: "Show me my bank accounts"
+
+- id: "bank.add_account"
+  category: "Bank"
+  name: "Add Bank Account"
+  description: "Use when the user wants to add a new bank account to track."
+  inputSchema:
+    type: object
+    properties:
+      name: {type: string}
+      account_number: {type: string}
+      sort_code: {type: string}
+      currency: {type: string, default: "GBP"}
+      opening_balance: {type: integer, default: 0}
+    required: [name]
+  example: "Add a new bank account for my savings"
+
+- id: "bank.transactions"
+  category: "Bank"
+  name: "Bank Transactions"
+  description: "Use when the user wants to list imported bank transactions."
+  inputSchema:
+    type: object
+    properties:
+      bank_account_id: {type: string, format: uuid}
+      start_date: {type: string}
+      end_date: {type: string}
+      status: {type: string, enum: ["unmatched","matched","all"], default: "all"}
+    required: [bank_account_id]
+  example: "Show unmatched transactions from my current account"
+
+- id: "bank.categorize"
+  category: "Bank"
+  name: "Categorize Bank Transaction"
+  description: "Use when the user wants to assign a bank transaction to an account/category."
+  inputSchema:
+    type: object
+    properties:
+      bank_transaction_id: {type: string, format: uuid}
+      account_id: {type: string, format: uuid}
+      contact_id: {type: string, format: uuid}
+      vat_rate: {type: string, enum: ["20%","5%","0%","exempt"]}
+    required: [bank_transaction_id, account_id]
+  example: "Categorize this transaction as marketing expense"
+
+- id: "recon.start"
+  category: "Reconciliation"
+  name: "Start Reconciliation"
+  description: "Use when the user wants to start a new bank reconciliation session."
+  inputSchema:
+    type: object
+    properties:
+      bank_account_id: {type: string, format: uuid}
+      statement_date: {type: string}
+      statement_balance: {type: integer}
+    required: [bank_account_id]
+  example: "Start a bank reconciliation for my current account"
+
+- id: "recon.match"
+  category: "Reconciliation"
+  name: "Match Transaction"
+  description: "Use when the user wants to match a bank transaction to a GL transaction."
+  inputSchema:
+    type: object
+    properties:
+      reconciliation_id: {type: string, format: uuid}
+      bank_transaction_id: {type: string, format: uuid}
+      transaction_id: {type: string, format: uuid}
+    required: [reconciliation_id, bank_transaction_id, transaction_id]
+  example: "Match this bank transaction to the recorded expense"
+
+- id: "recon.create_and_match"
+  category: "Reconciliation"
+  name: "Create & Match"
+  description: "Use when the user wants to create a new GL transaction AND match it to a bank transaction in one step."
+  inputSchema:
+    type: object
+    properties:
+      reconciliation_id: {type: string, format: uuid}
+      bank_transaction_id: {type: string, format: uuid}
+      description: {type: string}
+      amount: {type: integer}
+      vat_rate: {type: string, enum: ["20%","5%","0%","exempt"]}
+      account_id: {type: string, format: uuid}
+      contact_id: {type: string, format: uuid}
+    required: [reconciliation_id, bank_transaction_id]
+  example: "Create an expense for this bank transaction and match it"
+
+- id: "recon.status"
+  category: "Reconciliation"
+  name: "Reconciliation Status"
+  description: "Use when the user wants to check the status of an ongoing reconciliation."
+  inputSchema:
+    type: object
+    properties:
+      reconciliation_id: {type: string, format: uuid}
+    required: [reconciliation_id]
+  example: "How's my reconciliation going?"
+
+- id: "recon.report"
+  category: "Reconciliation"
+  name: "Reconciliation Report"
+  description: "Use when the user wants a summary report of a completed reconciliation."
+  inputSchema:
+    type: object
+    properties:
+      reconciliation_id: {type: string, format: uuid}
+    required: [reconciliation_id]
+  example: "Show me the reconciliation report"
+
+- id: "invoice.create"
+  category: "Invoice"
+  name: "Create Invoice"
+  description: "Use when the user wants to create a new sales invoice for a customer."
+  inputSchema:
+    type: object
+    properties:
+      contact_id: {type: string, format: uuid}
+      issue_date: {type: string}
+      due_date: {type: string}
+      lines:
+        type: array
+        items:
+          type: object
+          properties:
+            description: {type: string}
+            quantity: {type: integer}
+            unit_price: {type: integer}
+            vat_rate: {type: string, enum: ["20%","5%","0%","exempt"]}
+      notes: {type: string}
+    required: [contact_id, lines]
+  example: "Create an invoice for Acme Ltd for £2,500 for website design"
+
+- id: "invoice.send"
+  category: "Invoice"
+  name: "Send Invoice"
+  description: "Use when the user wants to send a draft invoice to the customer."
+  inputSchema:
+    type: object
+    properties:
+      invoice_id: {type: string, format: uuid}
+    required: [invoice_id]
+  example: "Send invoice INV-001 to the customer"
+
+- id: "invoice.list"
+  category: "Invoice"
+  name: "List Invoices"
+  description: "Use when the user wants to see all invoices or filter by status."
+  inputSchema:
+    type: object
+    properties:
+      status: {type: string, enum: ["draft","sent","viewed","paid","overdue","all"], default: "all"}
+      contact_id: {type: string, format: uuid}
+    example: "Show me all unpaid invoices"
+
+- id: "invoice.mark_paid"
+  category: "Invoice"
+  name: "Mark Invoice as Paid"
+  description: "Use when the user has received payment for an invoice."
+  inputSchema:
+    type: object
+    properties:
+      invoice_id: {type: string, format: uuid}
+    required: [invoice_id]
+  example: "Mark invoice INV-001 as paid"
+
+- id: "invoice.credit_note"
+  category: "Invoice"
+  name: "Create Credit Note"
+  description: "Use when the user wants to issue a credit note against an invoice."
+  inputSchema:
+    type: object
+    properties:
+      invoice_id: {type: string, format: uuid}
+      reason: {type: string}
+      amount: {type: integer}
+    required: [invoice_id]
+  example: "Issue a credit note for £100 on INV-001 due to overcharge"
+
+- id: "invoice.overdue"
+  category: "Invoice"
+  name: "List Overdue Invoices"
+  description: "Use when the user asks about overdue or late payments."
+  inputSchema:
+    type: object
+    properties: {}
+  example: "Which invoices are overdue?"
+
+- id: "vat.preview_return"
+  category: "VAT"
+  name: "Preview VAT Return"
+  description: "Use when the user wants to see their VAT return before filing."
+  inputSchema:
+    type: object
+    properties:
+      start_date: {type: string}
+      end_date: {type: string}
+    required: [start_date, end_date]
+  example: "Show me my VAT return for Q2 2025"
+
+- id: "vat.transaction_detail"
+  category: "VAT"
+  name: "VAT Transaction Detail"
+  description: "Use when the user wants to see which transactions are included in a VAT return."
+  inputSchema:
+    type: object
+    properties:
+      vat_period_id: {type: string, format: uuid}
+    required: [vat_period_id]
+  example: "What transactions are in my Q2 VAT return?"
+
+- id: "vat.adjustment"
+  category: "VAT"
+  name: "VAT Adjustment"
+  description: "Use when the user needs to make a manual adjustment to their VAT return."
+  inputSchema:
+    type: object
+    properties:
+      vat_period_id: {type: string, format: uuid}
+      amount: {type: integer}
+      reason: {type: string}
+    required: [vat_period_id, amount, reason]
+  example: "Add a £50 adjustment for fuel scale charge on my VAT return"
+
+- id: "vat.audit_trail"
+  category: "VAT"
+  name: "VAT Audit Trail"
+  description: "Use when the user wants to see the audit trail or history of VAT changes."
+  inputSchema:
+    type: object
+    properties:
+      vat_period_id: {type: string, format: uuid}
+      limit: {type: integer, default: 100}
+    required: [vat_period_id]
+  example: "Show me the audit trail for my VAT return"
+
+- id: "report.run"
+  category: "Report"
+  name: "Run Report"
+  description: "Use when the user wants to generate a financial report (P&L, balance sheet, trial balance, aged receivables/payables)."
+  inputSchema:
+    type: object
+    properties:
+      report_type: {type: string, enum: ["profit_and_loss","balance_sheet","trial_balance","aged_receivables","aged_payables"]}
+      start_date: {type: string}
+      end_date: {type: string}
+      as_at_date: {type: string}
+    required: [report_type]
+  example: "Run a Profit & Loss for last month"
+
+- id: "report.list"
+  category: "Report"
+  name: "List Available Reports"
+  description: "Use when the user wants to see what reports are available."
+  inputSchema:
+    type: object
+    properties: {}
+  example: "What reports can I run?"
+
+- id: "report.schedule"
+  category: "Report"
+  name: "Schedule Report"
+  description: "Use when the user wants to schedule a recurring report."
+  inputSchema:
+    type: object
+    properties:
+      report_type: {type: string, enum: ["profit_and_loss","balance_sheet","trial_balance","aged_receivables","aged_payables"]}
+      frequency: {type: string, enum: ["daily","weekly","monthly","quarterly"]}
+      email_to: {type: string, format: email}
+    required: [report_type, frequency]
+  example: "Send me a P&L report every month"

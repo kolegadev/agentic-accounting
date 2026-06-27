@@ -1,0 +1,14 @@
+{
+  "name": "Lloyds",
+  "description": "Lloyds Bank Business Current Account CSV export",
+  "date_format": "%d/%m/%Y",
+  "column_mappings": {
+    "date": "Transaction Date",
+    "description": "Transaction Description",
+    "amount": null,
+    "debit": "Debit Amount",
+    "credit": "Credit Amount",
+    "reference": "Transaction Reference",
+    "type": "Transaction Type"
+  }
+}
