@@ -1,8 +1,16 @@
-"""Chat Service — conversation pipeline (context, route, execute, format)."""
+"""Chat Service — conversation pipeline (context, route, execute, format).
+
+Persistence is layered: Katra cognitive memory (primary, cross-session) →
+Redis (fast, ephemeral fallback).  When Katra is available every conversation
+turn is stored as an episodic event and session context as a semantic fact,
+enabling cross-agent recall.  When Katra is unavailable the service degrades
+gracefully to Redis-only operation.
+"""
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -16,6 +24,7 @@ try:
 except ImportError:  # pragma: no cover
     aioredis = None  # type: ignore
 
+logger = logging.getLogger(__name__)
 
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 SESSION_TTL: int = 3600  # 1 hour
@@ -50,12 +59,29 @@ _TONE: dict[str, dict[str, str]] = {
 
 
 class ChatService:
-    """Stateless service for processing chat messages."""
+    """Stateless service for processing chat messages.
+
+    Uses Katra cognitive memory as the primary persistence layer, falling
+    back to Redis when Katra is unavailable.  Katra provides four memory
+    modalities (episodic, semantic, knowledge graph, temporal) that enable
+    cross-session recall — an agent started in Claude Code can continue a
+    conversation in OpenClaw or Kolega Code without losing context.
+    """
 
     def __init__(self) -> None:
         self._redis = None  # type: aioredis.Redis | None
         self._router = IntentRouter()
         self._registry = SkillRegistry()
+        # Katra client is lazy-loaded so tests can mock without importing
+        self._katra = None
+
+    def _get_katra(self):
+        """Lazy-load the Katra client singleton."""
+        if self._katra is not None:
+            return self._katra
+        from src.services.katra_client import get_katra_client
+        self._katra = get_katra_client()
+        return self._katra
 
     async def _get_redis(self):
         """Lazy Redis connection — returns None if redis package unavailable."""
@@ -74,12 +100,53 @@ class ChatService:
         return f"chat:state:{session_id}"
 
     async def get_conversation_state(self, session_id: str) -> dict[str, Any]:
-        """Load conversation state from Redis (or return default if unavailable)."""
+        """Load conversation state.
+
+        Priority: Redis cache → Katra episodic memory → default empty state.
+        Redis is tried first for sub-millisecond latency; Katra is the
+        authoritative long-term store queried when the Redis cache is cold.
+        """
+        # 1) Try Redis (fast cache)
         r = await self._get_redis()
         if r is not None:
             raw = await r.get(self._state_key(session_id))
             if raw:
                 return json.loads(raw)
+
+        # 2) Try Katra (authoritative long-term store)
+        katra = self._get_katra()
+        if katra.enabled:
+            try:
+                events = await katra.get_recent_events(session_id, limit=MAX_HISTORY)
+                if events:
+                    history = []
+                    context: dict[str, Any] = {}
+                    for ev in events:
+                        content = ev.get("content", "")
+                        role = "user" if "user" in str(ev.get("tags", [])) else "assistant"
+                        history.append({
+                            "role": role,
+                            "content": content,
+                            "timestamp": ev.get("created_at", datetime.now(timezone.utc).isoformat()),
+                        })
+                    state = {
+                        "session_id": session_id,
+                        "persona": "professional",
+                        "history": history[-MAX_HISTORY:],
+                        "context": context,
+                    }
+                    # Populate Redis cache for next time
+                    if r is not None:
+                        await r.set(
+                            self._state_key(session_id),
+                            json.dumps(state, default=str),
+                            ex=SESSION_TTL,
+                        )
+                    return state
+            except Exception:
+                logger.debug("Katra recall failed, using Redis-only mode", exc_info=True)
+
+        # 3) Default empty state
         return {
             "session_id": session_id,
             "persona": "professional",
@@ -88,10 +155,41 @@ class ChatService:
         }
 
     async def save_conversation_state(self, session_id: str, state: dict[str, Any]) -> None:
-        """Persist conversation state to Redis (no-op if unavailable)."""
+        """Persist conversation state to Redis + Katra.
+
+        Redis is the fast cache (always written).  Katra is the durable
+        long-term store (written optimistically — failures are logged but
+        never block the chat pipeline).
+        """
+        # Always write Redis (fast, non-blocking)
         r = await self._get_redis()
         if r is not None:
-            await r.set(self._state_key(session_id), json.dumps(state, default=str), ex=SESSION_TTL)
+            await r.set(
+                self._state_key(session_id),
+                json.dumps(state, default=str),
+                ex=SESSION_TTL,
+            )
+
+        # Store the last user turn in Katra as an episodic event
+        katra = self._get_katra()
+        if katra.enabled:
+            history = state.get("history", [])
+            try:
+                # Store the last 2 turns (user + assistant) as episodic events
+                for entry in history[-2:]:
+                    await katra.store_conversation_event(
+                        session_id=session_id,
+                        role=entry.get("role", "unknown"),
+                        content=str(entry.get("content", "")),
+                        metadata={"tool_call": entry.get("tool_call")} if entry.get("tool_call") else None,
+                    )
+                # Store context snapshot as a semantic fact
+                await katra.store_session_context(
+                    session_id=session_id,
+                    context=state.get("context", {}),
+                )
+            except Exception:
+                logger.debug("Katra persistence failed, continuing with Redis-only", exc_info=True)
 
     # ------------------------------------------------------------------
     # main pipeline

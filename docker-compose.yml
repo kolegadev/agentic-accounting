@@ -9,6 +9,7 @@ volumes:
   redis_data:
   minio_data:
   formance_data:
+  katra_data:
 
 services:
   postgres:
@@ -123,6 +124,7 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_PASSWORD:-minioadmin}
       FORNANCE_LEDGER_URL: http://formance-ledger:3068
+      KATRA_MCP_URL: http://katra-memory:3113/mcp
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
       - ./api:/app
@@ -159,6 +161,28 @@ services:
         condition: service_started
     networks:
       - accounting-net
+
+  katra-memory:
+    image: ghcr.io/kolegadev/katra-agentic-memory:latest
+    container_name: accounting-katra
+    restart: unless-stopped
+    environment:
+      DB_PATH: /data/katra.db
+      MCP_PORT: 3113
+      KATRA_ENABLED: "true"
+      KATRA_MCP_URL: http://katra-memory:3113/mcp
+    volumes:
+      - katra_data:/data
+    networks:
+      - accounting-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider",
+             "http://localhost:3113/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - memory
 
   chat-ui:
     build:

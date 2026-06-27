@@ -72,7 +72,8 @@ Agentic Accounting follows a clean modular architecture designed for headless LL
 
 - **Python 3.11+ / FastAPI** — async API server with SQLAlchemy 2.0 + PostgreSQL 16 for the primary ledger
 - **MCP Gateway** (port 3112) — exposes all 40 accounting tools via the Model Context Protocol using SSE transport
-- **Docker Compose** — 8 containerized services: `postgres`, `redis`, `minio`, `formance-postgres`, `formance-ledger`, `accounting-api`, `mcp-gateway`, `chat-ui` (optional, profile-activated)
+- **Katra-Agentic-Memory** — cognitive memory layer positioned between the API services and the data layer, providing cross-session conversation persistence with episodic, semantic, knowledge graph, and temporal memory stores. Conversations started in one MCP agent can continue in another without loss of context. Katra is an optional profile: `docker compose --profile memory up -d`
+- **Docker Compose** — 9 containerized services: `postgres`, `redis`, `minio`, `formance-postgres`, `formance-ledger`, `accounting-api`, `mcp-gateway`, `katra-memory` (optional, `--profile memory`), `chat-ui` (optional, profile-activated)
 - **Double-entry invariants** enforced at 3 independent layers:
   1. **Pydantic validators** — reject unbalanced or zero-amount postings at the API boundary
   2. **Service-layer checks** — validate account existence, period integrity, and business rules
@@ -93,12 +94,18 @@ Agentic Accounting follows a clean modular architecture designed for headless LL
           ┌──────▼──────┐
           │ Accounting  │  FastAPI (port 8000)
           │    API      │  Routes → Services → Models → DB
-          └──┬───┬───┬──┘
-             │   │   │
-    ┌────────▼┐ ┌▼──────┐ ┌──────▼──────┐
-    │Postgres │ │ Redis │ │ Formance    │
-    │  16     │ │   7   │ │ Ledger v2   │
-    └─────────┘ └───────┘ └─────────────┘
+          └──────┬──────┘
+                 │
+    ┌────────────▼────────────────────────┐
+    │      Katra-Agentic-Memory           │
+    │  episodic · semantic · knowledge    │
+    │  graph · temporal memory            │
+    └──┬────────────┬───────────┬─────────┘
+       │            │           │
+  ┌────▼────┐ ┌─────▼────┐ ┌───▼──────────┐
+  │Postgres │ │  Redis   │ │  Formance    │
+  │   16    │ │    7     │ │  Ledger v2   │
+  └─────────┘ └──────────┘ └──────────────┘
 ```
 
 ---
@@ -159,6 +166,7 @@ Phase 4 (Enterprise) 🔮 — Multi-Entity consolidation, Project Tracking,
 | **ORM** | SQLAlchemy 2.0 (async) |
 | **Database** | PostgreSQL 16 |
 | **Cache / Sessions** | Redis 7 |
+| **Cognitive Memory** | Katra-Agentic-Memory (Apache 2.0) |
 | **Object Storage** | MinIO |
 | **Production Ledger** | Formance Ledger v2 (MIT) |
 | **Containerization** | Docker Compose |
