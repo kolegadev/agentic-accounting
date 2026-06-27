@@ -9,6 +9,7 @@ from src.models.reconciliation import ReconciliationMatch, ReconciliationSession
 from src.models.report import ReportTemplate, ScheduledReport
 from src.models.transaction import Posting, Transaction, VATLine
 from src.models.user import User
+from src.models.recurring import RecurringInvoice as RecurringInvoiceModel, RecurringTemplate, RecurringTransaction
 from src.models.vat import VatAdjustment, VatPeriod, VatReturn
 
 __all__ = [
@@ -24,6 +25,9 @@ __all__ = [
     "Posting",
     "ReconciliationMatch",
     "ReconciliationSession",
+    "RecurringInvoiceModel",
+    "RecurringTemplate",
+    "RecurringTransaction",
     "ReportTemplate",
     "ScheduledReport",
     "Transaction",
