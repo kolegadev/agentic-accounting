@@ -1,7 +1,7 @@
 """MCP Gateway Server — SSE transport + JSON-RPC handler for Agentic Accounting.
 
 Exposes all 40+ accounting tools via the Model Context Protocol (MCP)
-over Server-Sent Events (SSE) transport on port 3112.
+over Server-Sent Events (SSE) transport on port 3200.
 """
 
 from __future__ import annotations

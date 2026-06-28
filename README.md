@@ -47,7 +47,7 @@ The agent will auto-discover all 40 accounting tools and walk you through chart 
 | **M7: VAT & MTD Preview** | UK 9-box return (Boxes 1–9), 3 schemes (standard/cash/flat rate), MTD digital-link compliance, VAT audit trail | 60 |
 | **M8: Core Financial Reports** | 5-stage report engine: Profit & Loss, Balance Sheet, Trial Balance, Aged Receivables, Aged Payables — multiple output formats | 49 |
 | **M9: LLM Chat Interface** | WebSocket chat, 40-SKILL registry, rule-based intent router, 3 personas (Accountant, Bookkeeper, Business Owner), natural date parsing, conversation state in Redis | 63 |
-| **M10: MCP Gateway + SKILL.md** | MCP protocol server (SSE transport, port 3112), SKILL.md auto-installer, Docker Compose orchestration | 8 |
+| **M10: MCP Gateway + SKILL.md** | MCP protocol server (SSE transport, port 3200), SKILL.md auto-installer, Docker Compose orchestration | 8 |
 
 ### Phase 2: Automation (8 Features)
 
@@ -71,7 +71,7 @@ The agent will auto-discover all 40 accounting tools and walk you through chart 
 Agentic Accounting follows a clean modular architecture designed for headless LLM operation:
 
 - **Python 3.11+ / FastAPI** — async API server with SQLAlchemy 2.0 + PostgreSQL 16 for the primary ledger
-- **MCP Gateway** (port 3112) — exposes all 40 accounting tools via the Model Context Protocol using SSE transport
+- **MCP Gateway** (port 3200) — exposes all 40 accounting tools via the Model Context Protocol using SSE transport
 - **Katra-Agentic-Memory** — cognitive memory layer positioned between the API services and the data layer, providing cross-session conversation persistence with episodic, semantic, knowledge graph, and temporal memory stores. Conversations started in one MCP agent can continue in another without loss of context. Katra is an optional profile: `docker compose --profile memory up -d`
 - **Docker Compose** — 9 containerized services: `postgres`, `redis`, `minio`, `formance-postgres`, `formance-ledger`, `accounting-api`, `mcp-gateway`, `katra-memory` (optional, `--profile memory`), `chat-ui` (optional, profile-activated)
 - **Double-entry invariants** enforced at 3 independent layers:
@@ -86,7 +86,7 @@ Agentic Accounting follows a clean modular architecture designed for headless LL
           ┌─────────────┐
           │  MCP Agent  │  (Claude Code, OpenClaw, Kolega Code…)
           └──────┬──────┘
-                 │ SSE (port 3112)
+                 │ SSE (port 3200)
           ┌──────▼──────┐
           │ MCP Gateway │  SKILL.md + registry.yaml → 40 tools
           └──────┬──────┘
@@ -170,7 +170,7 @@ Phase 4 (Enterprise) 🔮 — Multi-Entity consolidation, Project Tracking,
 | **Object Storage** | MinIO |
 | **Production Ledger** | Formance Ledger v2 (MIT) |
 | **Containerization** | Docker Compose |
-| **Agent Protocol** | MCP (SSE transport, port 3112) |
+| **Agent Protocol** | MCP (SSE transport, port 3200) |
 | **PDF Generation** | WeasyPrint |
 | **Templating** | Jinja2 |
 | **OFX Parsing** | ofxparse |

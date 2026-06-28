@@ -7,7 +7,7 @@ description: |
   management, general ledger, contacts, bank statement import, reconciliation, 
   invoicing, VAT returns, and financial reporting.
 server:
-  url: http://localhost:3112/sse
+  url: http://localhost:3200/sse
   transport: sse
   headers:
     Content-Type: application/json
@@ -18,7 +18,7 @@ server:
 ## Overview
 
 Agentic Accounting is a fully headless, LLM-native double-entry accounting system 
-designed for UK small businesses. This MCP server (port 3112, SSE transport) 
+designed for UK small businesses. This MCP server (port 3200, SSE transport) 
 exposes **40+ tools** across 8 domains that any MCP-compatible agent can invoke 
 to manage real business finances.
 
@@ -33,11 +33,11 @@ git clone <repo-url> && cd agentic-accounting
 docker compose up -d
 
 # Verify health
-curl http://localhost:3112/health
+curl http://localhost:3200/health
 # → {"status":"ok"}
 
 # Verify tools available
-curl -X POST http://localhost:3112/message \
+curl -X POST http://localhost:3200/message \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
@@ -248,7 +248,7 @@ curl -X POST http://localhost:3112/message \
 The MCP agent should connect to:
 
 ```
-URL: http://localhost:3112/sse
+URL: http://localhost:3200/sse
 Transport: SSE (Server-Sent Events)
 ```
 
@@ -257,7 +257,7 @@ Transport: SSE (Server-Sent Events)
 ```yaml
 servers:
   - name: agentic-accounting
-    url: http://localhost:3112/sse
+    url: http://localhost:3200/sse
     transport: sse
 ```
 
@@ -267,7 +267,7 @@ servers:
 {
   "mcpServers": {
     "agentic-accounting": {
-      "url": "http://localhost:3112/sse",
+      "url": "http://localhost:3200/sse",
       "transport": "sse"
     }
   }
@@ -280,7 +280,7 @@ servers:
 
 - Docker and Docker Compose v2
 - 4 GB RAM minimum (8 GB recommended)
-- Ports 5432, 6379, 8000, 9000, 9001, 3112 available
+- Ports 5432, 6379, 8000, 9000, 9001, 3200 available
 
 ### Installation
 
@@ -300,7 +300,7 @@ docker compose up -d
 docker compose ps
 
 # 5. Verify the gateway
-curl http://localhost:3112/health
+curl http://localhost:3200/health
 ```
 
 ### Service Architecture
@@ -311,14 +311,14 @@ curl http://localhost:3112/health
 | Redis 7 | 6379 | Caching & session store |
 | MinIO | 9000/9001 | Document & statement storage |
 | accounting-api | 8000 | Headless REST API (FastAPI) |
-| **MCP Gateway** | **3112** | **MCP protocol gateway (this service)** |
+| **MCP Gateway** | **3200** | **MCP protocol gateway (this service)** |
 | chat-ui | 3000 | Optional chat interface (profile: ui) |
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MCP_PORT` | 3112 | Gateway listen port |
+| `MCP_PORT` | 3200 | Gateway listen port |
 | `API_BASE_URL` | `http://accounting-api:8000` | Accounting API URL |
 | `SKILL_REGISTRY_PATH` | `/app/skills/registry.yaml` | Tool registry path |
 | `MCP_TRANSPORT` | `sse` | MCP transport method |
@@ -327,25 +327,25 @@ curl http://localhost:3112/health
 
 ```bash
 # Gateway health check
-curl http://localhost:3112/health
+curl http://localhost:3200/health
 # → {"status":"ok"}
 
 # Service info
-curl http://localhost:3112/
+curl http://localhost:3200/
 # → Returns service info, tools count, endpoints
 
 # MCP Initialize
-curl -X POST http://localhost:3112/message \
+curl -X POST http://localhost:3200/message \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
 
 # MCP Tools List (returns all 40+ tools)
-curl -X POST http://localhost:3112/message \
+curl -X POST http://localhost:3200/message \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 
 # SSE Connection Test
-curl -N http://localhost:3112/sse
+curl -N http://localhost:3200/sse
 # Should stream SSE events
 ```
 
@@ -427,7 +427,7 @@ cd .. && rm -rf agentic-accounting
 {
   "mcpServers": {
     "agentic-accounting": {
-      "url": "http://localhost:3112/sse",
+      "url": "http://localhost:3200/sse",
       "transport": "sse"
     }
   }
@@ -443,7 +443,7 @@ OpenClaw reads the SKILL.md frontmatter and establishes an SSE connection.
 Once connected, all 40+ tools are available to the agent.
 
 #### Generic MCP Client
-Any MCP-compatible client can connect to `http://localhost:3112/sse` using 
+Any MCP-compatible client can connect to `http://localhost:3200/sse` using 
 the SSE transport. The `initialize`, `tools/list`, `tools/call`, and 
 `resources/list` RPC methods are fully implemented.
 
@@ -490,7 +490,7 @@ libffi-dev shared-mime-info
 ## API Documentation
 
 Full OpenAPI documentation is available at:
-- Gateway: http://localhost:3112/docs
+- Gateway: http://localhost:3200/docs
 - Accounting API: http://localhost:8000/docs
 
 ## License

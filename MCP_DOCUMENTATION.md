@@ -3,7 +3,7 @@
 **Version:** 0.1.0  
 **Protocol:** Model Context Protocol (MCP)  
 **Transport:** Server-Sent Events (SSE)  
-**Port:** 3112  
+**Port:** 3200  
 **Last Updated:** 2026-06-27  
 
 ---
@@ -27,7 +27,7 @@ Agentic Accounting is a **headless, LLM-native double-entry accounting system** 
 ```
 ┌─────────────────────┐      SSE + JSON-RPC       ┌─────────────────────┐      HTTP/REST       ┌─────────────────────┐
 │   AI Agent          │ ◄───────────────────────► │   MCP Gateway       │ ◄──────────────────► │   Accounting API    │
-│  (Claude, OpenClaw, │     port 3112             │   (FastAPI)         │     port 8000        │   (FastAPI)         │
+│  (Claude, OpenClaw, │     port 3200             │   (FastAPI)         │     port 8000        │   (FastAPI)         │
 │   Kolega, etc.)     │                           │                     │                      │                     │
 └─────────────────────┘                           └─────────────────────┘                      └─────────────────────┘
 ```
@@ -39,7 +39,7 @@ The MCP Gateway:
 4. Proxies validated calls to the **Accounting API** on port 8000.
 5. Returns results in MCP-compliant format.
 
-### SSE Transport on Port 3112
+### SSE Transport on Port 3200
 
 The gateway uses **Server-Sent Events (SSE)** for transport. The agent opens a long-lived GET connection to `/sse`, which streams:
 - An `endpoint` event telling the agent where to POST JSON-RPC messages.
@@ -59,7 +59,7 @@ The Agentic Accounting system also integrates with **Katra-Agentic-Memory** (Apa
 **Two MCP servers, one system:**
 | Server | Port | Purpose |
 |--------|------|---------|
-| Accounting MCP Gateway | 3112 | 40+ accounting tools (ledger, invoicing, VAT, reports) |
+| Accounting MCP Gateway | 3200 | 40+ accounting tools (ledger, invoicing, VAT, reports) |
 | Katra Cognitive Memory | 3113 | Episodic, semantic, knowledge graph, and temporal memory |
 
 Both speak the same MCP protocol — any MCP-compatible agent can connect to either or both. The accounting API automatically uses Katra for conversation persistence when available, falling back to Redis-only mode when unavailable.
@@ -81,7 +81,7 @@ Both speak the same MCP protocol — any MCP-compatible agent can connect to eit
 ### Health Check
 
 ```bash
-curl http://localhost:3112/health
+curl http://localhost:3200/health
 ```
 
 **Response:**
@@ -96,7 +96,7 @@ The health endpoint returns HTTP 200 when the gateway is running. It does not de
 The SSE endpoint establishes a persistent connection. The gateway streams events to the client.
 
 ```bash
-curl -N http://localhost:3112/sse
+curl -N http://localhost:3200/sse
 ```
 
 **Typical stream output:**
@@ -1803,7 +1803,7 @@ The file lives at the **repository root** (`agentic-accounting/SKILL.md`) and co
 When an agent that supports `SKILL.md` starts up in the project directory:
 
 1. It reads the YAML frontmatter from `SKILL.md`.
-2. It extracts the `server.url` (`http://localhost:3112/sse`) and `server.transport` (`sse`).
+2. It extracts the `server.url` (`http://localhost:3200/sse`) and `server.transport` (`sse`).
 3. It opens an SSE connection to `/sse` and receives the `endpoint` event.
 4. It calls `initialize` to negotiate protocol capabilities.
 5. It calls `tools/list` to discover all 40 available tools with their schemas.
@@ -1819,7 +1819,7 @@ description: |
   Agentic Accounting — a headless, LLM-native double-entry accounting system 
   for UK small businesses. Exposes 40+ MCP tools...
 server:
-  url: http://localhost:3112/sse
+  url: http://localhost:3200/sse
   transport: sse
   headers:
     Content-Type: application/json
@@ -1842,7 +1842,7 @@ Followed by markdown sections:
 ```yaml
 servers:
   - name: agentic-accounting
-    url: http://localhost:3112/sse
+    url: http://localhost:3200/sse
     transport: sse
 ```
 
@@ -1852,7 +1852,7 @@ servers:
 {
   "mcpServers": {
     "agentic-accounting": {
-      "url": "http://localhost:3112/sse",
+      "url": "http://localhost:3200/sse",
       "transport": "sse"
     }
   }
@@ -1941,6 +1941,66 @@ The accounting API connects to Katra automatically when `KATRA_MCP_URL` is set. 
 
 If Katra is unreachable or `KATRA_ENABLED=false`, the system falls back to Redis-only conversation storage with a 1-hour TTL. No errors are raised — conversation history is simply not persisted across restarts when Katra is unavailable.
 
+### 7.6 Multi-Instance Katra Setup
+
+Katra supports running multiple instances on a single machine by configuring different ports. Each instance uses its own data volume and MCP port.
+
+#### Port Allocation for Co-Existing Katra Instances
+
+| Instance | Host Port | Container Port | Purpose |
+|----------|-----------|---------------|---------|
+| **Main Katra** (for OpenCode) | 3112 | 3100 | Memory for OpenCode, Claude Code, watchers |
+| **Accounting Katra** | 3113 | 3100 | Accounting system's PRIVATE memory |
+
+#### Running Multiple Katra Instances
+
+Each Katra instance requires a unique:
+1. **MCP_PORT** — the external port for MCP communication
+2. **PORT** — the internal container port (default: 3100)
+3. **Data volume** — separate persistent storage
+
+Example `docker-compose.yml` fragment for two instances:
+
+```yaml
+services:
+  # Main Katra instance (for OpenCode/claude)
+  katra-main:
+    image: ghcr.io/kolegadev/katra-agentic-memory:latest
+    environment:
+      MCP_PORT: 3112
+      KATRA_MCP_URL: http://katra-main:3112/mcp
+      DB_PATH: /data/katra.db
+      KATRA_ENABLED: "true"
+    volumes:
+      - katra_main_data:/data
+    ports:
+      - "3112:3112"
+
+  # Accounting Katra instance (PRIVATE, for accounting only)
+  katra-accounting:
+    image: ghcr.io/kolegadev/katra-agentic-memory:latest
+    environment:
+      MCP_PORT: 3113
+      KATRA_MCP_URL: http://katra-accounting:3113/mcp
+      DB_PATH: /data/katra.db
+      KATRA_ENABLED: "true"
+    volumes:
+      - katra_accounting_data:/data
+    ports:
+      - "3113:3113"
+
+volumes:
+  katra_main_data:
+  katra_accounting_data:
+```
+
+**Key points:**
+- Each Katra instance has completely isolated memory — conversations stored in one instance are not visible to the other
+- The main Katra (port 3112) is shared by OpenCode and other development tools
+- The accounting Katra (port 3113) is PRIVATE to the accounting system only
+- Set `KATRA_MCP_URL` to point to the correct instance (e.g., `http://katra-accounting:3113/mcp` for accounting)
+- Data volumes must be unique per instance to prevent data corruption
+
 ---
 
 ## 8. Tool-to-API Mapping
@@ -1999,7 +2059,7 @@ The following table shows exactly how each MCP tool maps to the internal Account
 The MVP operates on a **local trust model**:
 
 - All services run in Docker containers on a single machine.
-- The MCP Gateway binds to `0.0.0.0:3112` within the Docker network but is published only as configured in `docker-compose.yml`.
+- The MCP Gateway binds to `0.0.0.0:3200` within the Docker network but is published only as configured in `docker-compose.yml`.
 - There is **no authentication**, **no API keys**, and **no user sessions** in the MVP.
 - The gateway trusts any request arriving on the `/message` endpoint because it is assumed to originate from a local agent on the same machine.
 
@@ -2025,7 +2085,7 @@ Planned for Phase 2 and beyond:
 
 | Service | Internal Port | Published | Notes |
 |---------|:------------:|-----------|-------|
-| MCP Gateway | 3112 | `${MCP_PORT:-3112}` | To restrict to localhost only, set `MCP_PORT=127.0.0.1:3112:3112` or omit the port mapping entirely |
+| MCP Gateway | 3200 | `${MCP_PORT:-3200}` | To restrict to localhost only, set `MCP_PORT=127.0.0.1:3200:3200` or omit the port mapping entirely |
 | Accounting API | 8000 | `${API_PORT:-8000}` | Internal to Docker network in production |
 | PostgreSQL | 5432 | `${DB_PORT:-5432}` | Can be omitted if only containers need access |
 | Redis | 6379 | `${REDIS_PORT:-6379}` | Can be omitted if only containers need access |
@@ -2055,7 +2115,7 @@ docker compose ps
 **Step 2: Verify the gateway**
 
 ```bash
-curl http://localhost:3112/health
+curl http://localhost:3200/health
 # → {"status":"ok"}
 ```
 
@@ -2073,7 +2133,7 @@ Add the MCP server entry:
 {
   "mcpServers": {
     "agentic-accounting": {
-      "url": "http://localhost:3112/sse",
+      "url": "http://localhost:3200/sse",
       "transport": "sse"
     }
   }
@@ -2088,7 +2148,7 @@ Create or edit `.mcp.json` in your project root:
 {
   "mcpServers": {
     "agentic-accounting": {
-      "url": "http://localhost:3112/sse",
+      "url": "http://localhost:3200/sse",
       "transport": "sse"
     }
   }
@@ -2135,13 +2195,13 @@ OpenClaw reads `SKILL.md` from the repository root automatically. The YAML front
 
 ```yaml
 server:
-  url: http://localhost:3112/sse
+  url: http://localhost:3200/sse
   transport: sse
 ```
 
 OpenClaw:
 1. Reads the frontmatter.
-2. Establishes an SSE connection to `http://localhost:3112/sse`.
+2. Establishes an SSE connection to `http://localhost:3200/sse`.
 3. Calls `initialize`.
 4. Calls `tools/list` to discover all 40 tools.
 5. The tools appear in OpenClaw's tool palette.
@@ -2176,13 +2236,13 @@ Kolega Code reads the `SKILL.md` file from the repository root when you open the
 
 ```yaml
 server:
-  url: http://localhost:3112/sse
+  url: http://localhost:3200/sse
   transport: sse
 ```
 
 Kolega Code:
 1. Reads `SKILL.md` at project open.
-2. Connects via SSE to port 3112.
+2. Connects via SSE to port 3200.
 3. Calls `initialize` → `tools/list` → ready to use all 40 tools.
 4. The tools are available in Kolega Code's tool registry for any sub-agent.
 
@@ -2215,7 +2275,7 @@ import json
 import time
 import requests
 
-GATEWAY_URL = "http://localhost:3112"
+GATEWAY_URL = "http://localhost:3200"
 MESSAGE_URL = f"{GATEWAY_URL}/message"
 
 
@@ -2342,7 +2402,7 @@ Resources: 15 available
 │         │                 │                 │              │
 │  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐     │
 │  │ Accounting   │  │ MCP Gateway  │  │  Chat UI     │     │
-│  │ API :8000    │◄─┤ :3112 (SSE)  │  │  :3000 (opt) │     │
+│  │ API :8000    │◄─┤ :3200 (SSE)  │  │  :3000 (opt) │     │
 │  │ (FastAPI)    │  │ (FastAPI)    │  │              │     │
 │  └──────────────┘  └──────────────┘  └──────────────┘     │
 │                           │                                │
@@ -2360,7 +2420,7 @@ Resources: 15 available
 
 | Variable | Default | Used By | Description |
 |----------|---------|---------|-------------|
-| `MCP_PORT` | `3112` | Gateway | Listen port for MCP gateway |
+| `MCP_PORT` | `3200` | Gateway | Listen port for MCP gateway |
 | `API_BASE_URL` | `http://accounting-api:8000` | Gateway | Accounting API URL (internal Docker) |
 | `SKILL_REGISTRY_PATH` | `/app/skills/registry.yaml` | Gateway | Path to tool registry YAML |
 | `MCP_TRANSPORT` | `sse` | Gateway | Transport method (SSE only in MVP) |
@@ -2419,22 +2479,22 @@ docker compose logs -f accounting-api
 
 ```bash
 # Initialize
-curl -s -X POST http://localhost:3112/message \
+curl -s -X POST http://localhost:3200/message \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | jq .
 
 # List all tools
-curl -s -X POST http://localhost:3112/message \
+curl -s -X POST http://localhost:3200/message \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | jq '.result.tools | length'
 
 # Call a tool
-curl -s -X POST http://localhost:3112/message \
+curl -s -X POST http://localhost:3200/message \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"coa.list","arguments":{}}}' | jq .
 
 # List resources
-curl -s -X POST http://localhost:3112/message \
+curl -s -X POST http://localhost:3200/message \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":4,"method":"resources/list","params":{}}' | jq .
 ```

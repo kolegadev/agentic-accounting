@@ -148,12 +148,12 @@ services:
     container_name: accounting-gateway
     restart: unless-stopped
     ports:
-      - "${MCP_PORT:-3112}:3112"
+      - "${MCP_PORT:-3200}:3200"
     environment:
       API_BASE_URL: http://accounting-api:8000
       SKILL_REGISTRY_PATH: /app/skills/registry.yaml
       MCP_TRANSPORT: sse
-      MCP_PORT: 3112
+      MCP_PORT: 3200
     volumes:
       - ./skills:/app/skills:ro
     depends_on:

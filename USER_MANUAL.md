@@ -59,7 +59,7 @@ Agentic Accounting offers two distinct pathways to the same underlying system:
 | **Pathway A: User-Directed** | Typing natural language in a chat UI (`http://localhost:3000`) | Day-to-day bookkeeping by business owners; quick lookups; anyone who prefers typing questions |
 | **Pathway B: AI Agent-Directed** | An MCP-compatible AI agent (Claude Code, OpenClaw, Kolega Code) calls tools autonomously on your behalf | Complex multi-step workflows; batch operations; developers integrating accounting into agent pipelines |
 
-Both pathways use the same MCP gateway (port 3112) and the same accounting API (port 8000). They differ only in how you issue commands—directly in a chatbox or through an AI agent that reasons and chains multiple tools together.
+Both pathways use the same MCP gateway (port 3200) and the same accounting API (port 8000). They differ only in how you issue commands—directly in a chatbox or through an AI agent that reasons and chains multiple tools together.
 
 > **Key Concept:** You do not need an AI agent to use the system. The Chat UI (Pathway A) gives you the same conversational experience directly. Use Pathway B when you want an AI agent to handle multi-step reasoning, schedule recurring reports, or integrate accounting into your developer workflow.
 
@@ -76,7 +76,7 @@ Both pathways use the same MCP gateway (port 3112) and the same accounting API (
 | **Disk Space** | 2 GB free | 10 GB free (for stored documents) |
 | **Docker** | Docker 24+ with Docker Compose v2 | Latest stable |
 | **Python** | 3.11+ (development only) | 3.12+ |
-| **Available Ports** | 3000, 3112, 5432, 6379, 8000, 9000, 9001 | These must not be in use |
+| **Available Ports** | 3000, 3200, 5432, 6379, 8000, 9000, 9001 | These must not be in use (add 3113 for Katra memory) |
 
 **Optional (Pathway B only):**
 - Claude Code (Claude Desktop or VS Code extension)
@@ -106,7 +106,7 @@ docker compose up -d
 - Redis 7 (caching & session store)
 - MinIO (document & statement object storage)
 - Accounting API (FastAPI on port 8000)
-- MCP Gateway (port 3112 — the bridge for both pathways)
+- MCP Gateway (port 3200 — the bridge for both pathways)
 - Formance Ledger (v2, dual-entry verification engine)
 
 **Verify everything is healthy:**
@@ -115,7 +115,7 @@ docker compose up -d
 docker compose ps
 # All services should show "healthy" or "running"
 
-curl http://localhost:3112/health
+curl http://localhost:3200/health
 # → {"status":"ok"}
 ```
 
@@ -596,7 +596,7 @@ Frequencies: `daily`, `weekly`, `monthly`, `quarterly`.
 
 ## 4. Pathway B: AI Agent-Directed (MCP Tools)
 
-Pathway B lets an MCP-compatible AI agent invoke accounting tools directly. The agent reads `SKILL.md` from the repository root, discovers all 40+ tools, and calls them via the MCP gateway on port 3112.
+Pathway B lets an MCP-compatible AI agent invoke accounting tools directly. The agent reads `SKILL.md` from the repository root, discovers all 40+ tools, and calls them via the MCP gateway on port 3200.
 
 ### 4a. Setting Up Your Agent
 
@@ -615,7 +615,7 @@ Then add to Claude's MCP server configuration:
 {
   "mcpServers": {
     "agentic-accounting": {
-      "url": "http://localhost:3112/sse",
+      "url": "http://localhost:3200/sse",
       "transport": "sse"
     }
   }
@@ -644,7 +644,7 @@ Kolega Code reads the SKILL.md frontmatter and connects automatically.
 
 ```bash
 # List all available tools (your agent will see these)
-curl -X POST http://localhost:3112/message \
+curl -X POST http://localhost:3200/message \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
@@ -669,7 +669,7 @@ No manual data export, no copy-paste, no cloud sync — Katra stores everything 
 
 ### 4b. MCP Tool Reference
 
-All tools use **SSE transport** on `http://localhost:3112/sse`. Amounts are in **pence** (integers). IDs are **UUIDs**.
+All tools use **SSE transport** on `http://localhost:3200/sse`. Amounts are in **pence** (integers). IDs are **UUIDs**.
 
 ---
 
@@ -1169,13 +1169,13 @@ docker info
 lsof -i :5432  # PostgreSQL
 lsof -i :6379  # Redis
 lsof -i :8000  # API
-lsof -i :3112  # MCP Gateway
+lsof -i :3200  # MCP Gateway
 lsof -i :3000  # Chat UI
 
 # If ports are in use, edit .env to remap:
 #   DB_PORT=5433
 #   API_PORT=8001
-#   MCP_PORT=3113
+#   MCP_PORT=3201
 #   UI_PORT=3001
 ```
 
@@ -1210,10 +1210,10 @@ docker compose logs chat-ui
 
 ```bash
 # Verify gateway health
-curl http://localhost:3112/health
+curl http://localhost:3200/health
 
 # Check MCP tools list
-curl -X POST http://localhost:3112/message \
+curl -X POST http://localhost:3200/message \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 
@@ -1225,13 +1225,13 @@ docker compose exec accounting-gateway ls -la /app/skills/
 
 ```bash
 # Verify SSE endpoint is reachable
-curl -N http://localhost:3112/sse
+curl -N http://localhost:3200/sse
 
 # Check agent config points to correct URL
-# The URL must be http://localhost:3112/sse (not just http://localhost:3112)
+# The URL must be http://localhost:3200/sse (not just http://localhost:3200)
 
 # For Docker-based agents: use host.docker.internal instead of localhost
-#   url: http://host.docker.internal:3112/sse
+#   url: http://host.docker.internal:3200/sse
 ```
 
 #### File Imports Fail (CSV/OFX)
@@ -1343,7 +1343,7 @@ docker compose exec -T postgres psql -U accounting accounting < backup_20260627.
 docker compose up -d
 
 # 4. Verify
-curl http://localhost:3112/health
+curl http://localhost:3200/health
 ```
 
 ### UK VAT Data Retention
@@ -1407,7 +1407,8 @@ cd .. && rm -rf agentic-accounting
 | Port | Service | Pathway |
 |---|---|---|
 | 3000 | Chat UI | Pathway A |
-| 3112 | MCP Gateway | Both A & B |
+| 3200 | MCP Gateway | Both A & B |
+| 3113 | Katra Memory | Cognitive Memory |
 | 5432 | PostgreSQL | Internal |
 | 6379 | Redis | Internal |
 | 8000 | Accounting API | Internal (proxy) |
@@ -1418,10 +1419,10 @@ cd .. && rm -rf agentic-accounting
 
 ```bash
 # Health check
-curl http://localhost:3112/health
+curl http://localhost:3200/health
 
 # List all MCP tools
-curl -X POST http://localhost:3112/message \
+curl -X POST http://localhost:3200/message \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 
@@ -1429,7 +1430,7 @@ curl -X POST http://localhost:3112/message \
 open http://localhost:8000/docs
 
 # Gateway documentation
-open http://localhost:3112/docs
+open http://localhost:3200/docs
 
 # View service logs
 docker compose logs -f accounting-api
