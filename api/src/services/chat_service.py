@@ -155,12 +155,16 @@ class ChatService:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
-        # ── Step 2: LLM generates the response ───────────────────────
-        #   Pass the tool result (or routing decision) as context so
-        #   the LLM produces a natural, human-readable message.
-        assistant_content = await self._generate_response(
-            history, route_result, tool_result,
-        )
+        # ── Step 2: Generate response ────────────────────────────────
+        # If the LLM already produced a text response, use it directly.
+        # Only call the LLM again when a tool was executed (or failed)
+        # and we need a natural-language summary of the result.
+        if "response" in route_result and tool_result is None:
+            assistant_content = route_result["response"]
+        else:
+            assistant_content = await self._generate_response(
+                history, route_result, tool_result,
+            )
 
         history.append({
             "role": "assistant", "content": assistant_content,
