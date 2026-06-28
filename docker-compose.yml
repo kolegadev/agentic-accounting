@@ -258,7 +258,7 @@ services:
     container_name: accounting-chat-ui
     restart: unless-stopped
     ports:
-      - "${UI_PORT:-3000}:3000"
+      - "${UI_PORT:-3001}:3000"
     environment:
       API_BASE_URL: http://accounting-api:8000
       WS_URL: ws://accounting-api:8000/ws
