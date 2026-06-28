@@ -129,6 +129,10 @@ services:
       FORNANCE_LEDGER_URL: http://formance-ledger:3068
       KATRA_MCP_URL: http://accounting-katra-server:3113/mcp
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      LLM_API_URL: ${LLM_API_URL:-http://localhost:11434/v1/chat/completions}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-v4-pro}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
     volumes:
       - ./api:/app
       - ./coa_templates:/app/coa_templates
