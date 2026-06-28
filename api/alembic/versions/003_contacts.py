@@ -121,7 +121,6 @@ def upgrade() -> None:
             postgresql.UUID(as_uuid=True),
             sa.ForeignKey("accounts.id", ondelete="SET NULL"),
             nullable=True,
-            index=True,
             comment="Default GL account for transactions with this contact",
         ),
         # Currency

@@ -172,7 +172,6 @@ def upgrade() -> None:
             postgresql.UUID(as_uuid=True),
             sa.ForeignKey("transactions.id", ondelete="CASCADE"),
             nullable=False,
-            index=True,
         ),
         # FK to accounts
         sa.Column(
@@ -180,7 +179,6 @@ def upgrade() -> None:
             postgresql.UUID(as_uuid=True),
             sa.ForeignKey("accounts.id", ondelete="RESTRICT"),
             nullable=False,
-            index=True,
         ),
         # Debit amount
         sa.Column(
@@ -257,7 +255,6 @@ def upgrade() -> None:
             postgresql.UUID(as_uuid=True),
             sa.ForeignKey("postings.id", ondelete="CASCADE"),
             nullable=False,
-            index=True,
         ),
         # VAT rate
         sa.Column(

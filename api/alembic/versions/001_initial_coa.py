@@ -54,7 +54,6 @@ def upgrade() -> None:
             sa.String(10),
             unique=True,
             nullable=False,
-            index=True,
             comment="4-digit account code (e.g., 1000, 5210). Must be in valid range for category.",
         ),
         sa.Column(
@@ -81,7 +80,6 @@ def upgrade() -> None:
             postgresql.UUID(as_uuid=True),
             sa.ForeignKey("accounts.id", ondelete="SET NULL"),
             nullable=True,
-            index=True,
             comment="Self-referencing FK for parent account (hierarchy max 2 levels).",
         ),
         # VAT rate
