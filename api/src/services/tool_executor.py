@@ -26,6 +26,7 @@ class ToolExecutor:
     # corresponding service method.
     SUPPORTED_TOOLS: set[str] = {
         "coa.list", "coa.add_account", "coa.edit_account", "coa.set_vat_rate",
+        "coa.load_template",
         "gl.record_expense", "gl.record_income", "gl.record_transfer",
         "gl.journal_entry", "gl.list_transactions", "gl.transaction_detail",
         "gl.undo_transaction",
@@ -103,6 +104,16 @@ async def _coa_edit_account(db: AsyncSession, params: dict) -> Any:
     data = AccountUpdate(**{k: v for k, v in params.items() if k != "account_id" and v is not None})
     account = await CoaService.update_account(db, uuid.UUID(params["account_id"]), data)
     return account.model_dump()
+
+
+async def _coa_load_template(db: AsyncSession, params: dict) -> Any:
+    from src.services.coa_service import CoaService
+    accounts = await CoaService.load_template(db, str(params["template_name"]))
+    return {
+        "loaded": len(accounts),
+        "template": params["template_name"],
+        "accounts": [{"code": a.code, "name": a.name, "category": a.category} for a in accounts],
+    }
 
 
 async def _coa_set_vat_rate(db: AsyncSession, params: dict) -> Any:
@@ -570,6 +581,7 @@ _HANDLERS: dict[str, Any] = {
     "coa.list": _coa_list,
     "coa.add_account": _coa_add_account,
     "coa.edit_account": _coa_edit_account,
+    "coa.load_template": _coa_load_template,
     "coa.set_vat_rate": _coa_set_vat_rate,
     "gl.record_expense": _gl_record_expense,
     "gl.record_income": _gl_record_income,

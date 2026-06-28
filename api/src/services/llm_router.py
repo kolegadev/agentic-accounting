@@ -48,21 +48,24 @@ If the user is just chatting or asking a general question, respond with:
 
     {"response": "<helpful answer>"}
 
-## Important Rules
+## CRITICAL Rules
 
-1. **All monetary amounts in INTEGER PENCE.**  £50.00 → 5000, £1,200.00 → 120000.
+1. **All monetary amounts in INTEGER PENCE.**  £50.00 → 5000.
    Never use floats or decimals for money.
 
-2. **Dates in ISO 8601 format** (YYYY-MM-DD).  If the user says "today",
-   "yesterday", "last month", etc., resolve to an actual date.  Today is
-   {today}.
+2. **Dates in ISO 8601 format** (YYYY-MM-DD).  Today is {today}.
 
-3. **Only call tools that exist** in the registry below.  If the user asks for
-   something that has no matching tool, respond with a clarifying question
-   instead of guessing.
+3. **Only call tools that exist** in the registry below.  If no matching
+   tool exists, respond with: {{"response": "<clarifying question>"}}
 
-4. **For setup / onboarding** (the system has no chart of accounts yet), guide
-   the user through setup steps rather than calling tools that would fail.
+4. **For chart of accounts setup: ALWAYS use `coa.load_template`.**
+   NEVER list individual accounts in your response text.  The templates
+   handle all account creation in one call.  Available templates:
+   uk_sole_trader, uk_limited_company, uk_partnership, uk_micro_entity,
+   uk_property_landlord.
+
+5. **Keep responses concise.**  The user doesn't need a wall of text —
+   a short, helpful reply is better.  Let tool results speak for themselves.
 
 ## Available Tools
 
@@ -207,34 +210,49 @@ class LLMRouter:
     def _parse_response(self, raw: str) -> dict[str, Any]:
         """Parse the LLM's JSON response into a structured result.
 
-        Handles common LLM output quirks: wrapping in ```json fences, trailing commas,
-        extra whitespace.
+        Handles common LLM output quirks: wrapping in ```json fences,
+        trailing commas, leading garbage characters, extra whitespace.
         """
-        # Strip markdown code fences
         text = raw.strip()
+
+        # Strip markdown code fences
         if text.startswith("```"):
-            # Remove opening fence line
             text = text[text.index("\n") + 1:] if "\n" in text else text[3:]
         if text.endswith("```"):
             text = text[: text.rindex("```")].strip()
 
-        # Remove trailing commas before closing brackets/braces (common LLM artifact)
-        text = text.replace(",}", "}").replace(",]", "]").replace(",\n}", "\n}").replace(",\n]", "\n]")
+        # Remove trailing commas (common LLM artifact)
+        text = text.replace(",}", "}").replace(",]", "]")
+
+        # Strip leading garbage before first { — LLMs sometimes
+        # prefix JSON with "." or other non-JSON characters
+        brace_pos = text.find("{")
+        if brace_pos > 0:
+            text = text[brace_pos:]
 
         try:
             result = json.loads(text)
         except json.JSONDecodeError:
-            # Try to extract a JSON object from the text
+            # Try to extract a nested JSON object
             import re
-            match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+            match = re.search(r'\{[^{}]*\}(?:\s*\n\s*\{[^{}]*\})*', text, re.DOTALL)
             if match:
                 try:
                     result = json.loads(match.group(0))
                 except json.JSONDecodeError:
-                    logger.warning("Could not parse LLM response as JSON: %s", raw[:200])
-                    return {"response": raw[:500]}
+                    # Try a simpler regex for non-nested JSON
+                    m2 = re.search(r'\{.*\}', text, re.DOTALL)
+                    if m2:
+                        try:
+                            result = json.loads(m2.group(0))
+                        except json.JSONDecodeError:
+                            logger.warning("Could not parse LLM response as JSON: %s", raw[:200])
+                            return {"response": raw[:500]}
+                    else:
+                        logger.warning("No JSON object in LLM response: %s", raw[:200])
+                        return {"response": raw[:500]}
             else:
-                logger.warning("No JSON object found in LLM response: %s", raw[:200])
+                logger.warning("No JSON object in LLM response: %s", raw[:200])
                 return {"response": raw[:500]}
 
         # Normalise result

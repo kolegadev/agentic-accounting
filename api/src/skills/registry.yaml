@@ -55,6 +55,17 @@
     required: [account_id, vat_rate]
   example: "Set VAT rate to 20% on the marketing account"
 
+- id: "coa.load_template"
+  category: "COA"
+  name: "Load COA Template"
+  description: "Load a pre-built chart of accounts template. Use when setting up a new company — DO NOT create accounts individually. Templates available: uk_sole_trader, uk_limited_company, uk_partnership, uk_micro_entity, uk_property_landlord."
+  inputSchema:
+    type: object
+    properties:
+      template_name: {type: string, description: "Template name e.g. uk_limited_company"}
+    required: [template_name]
+  example: "Load the UK limited company chart of accounts template"
+
 - id: "gl.record_expense"
   category: "GL"
   name: "Record Expense"

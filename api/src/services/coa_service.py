@@ -210,10 +210,25 @@ class CoaService:
 
         The template file is expected at:
             api/src/coa_templates/{template_name}.json
+
+        Does fuzzy matching: 'uk_sole_trader' matches
+        'uk_sole_trader_vat.json' or 'uk_sole_trader_no_vat.json'.
         """
+        # Direct match first
         template_path = COA_TEMPLATES_DIR / f"{template_name}.json"
         if not template_path.exists():
-            raise TemplateNotFoundError(template_name)
+            # Fuzzy match: look for files starting with template_name
+            candidates = sorted(COA_TEMPLATES_DIR.glob(f"{template_name}*.json"))
+            if not candidates:
+                # Try without VAT/no-VAT suffix
+                for suffix in ("_vat", "_no_vat"):
+                    alt = COA_TEMPLATES_DIR / f"{template_name}{suffix}.json"
+                    if alt.exists():
+                        candidates = [alt]
+                        break
+            if not candidates:
+                raise TemplateNotFoundError(template_name)
+            template_path = candidates[0]
 
         with open(template_path, encoding="utf-8") as fh:
             accounts_data = json.load(fh)
