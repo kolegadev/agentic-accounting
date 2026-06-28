@@ -6,8 +6,8 @@ from src.services.bank_rule_service import BankRuleService
 from src.services.chat_service import ChatService
 from src.services.coa_service import CoaService
 from src.services.document_service import DocumentService
-from src.services.intent_router import IntentRouter
+from src.services.llm_router import LLMRouter
 from src.services.mtd_service import MtdService
 from src.services.skill_registry import SkillRegistry
 
-__all__ = ["ApprovalService", "AuthService", "BankRuleService", "ChatService", "CoaService", "DocumentService", "IntentRouter", "MtdService", "SkillRegistry"]
+__all__ = ["ApprovalService", "AuthService", "BankRuleService", "ChatService", "CoaService", "DocumentService", "LLMRouter", "MtdService", "SkillRegistry"]

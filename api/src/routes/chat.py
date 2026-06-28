@@ -59,27 +59,38 @@ async def chat_websocket(websocket: WebSocket, session_id: str) -> None:
             # Process the message through the chat pipeline
             result = await _chat_service.process_message(session_id, content)
 
-            # Send tool call
-            tool_call = ToolCall(
-                session_id=session_id,
-                skill_id=result["tool_call"]["skill_id"],
-                params=result["tool_call"]["params"],
-                confidence=result["tool_call"]["confidence"],
-            )
-            await websocket.send_text(tool_call.model_dump_json())
+            # Send response — may be a text reply or a tool call
+            response_text = result.get("message", {}).get("text", "")
+            tc = result.get("tool_call")
 
-            # Send tool result (simulated)
-            tool_result = ToolResult(
-                session_id=session_id,
-                tool_call_id=tool_call.tool_call_id,
-                success=True,
-                result={
-                    "response": result["message"]["text"],
-                    "persona": result["message"]["persona"],
-                    "skill": result["tool_call"]["skill"]["name"] if result["tool_call"].get("skill") else result["tool_call"]["skill_id"],
-                },
-            )
-            await websocket.send_text(tool_result.model_dump_json())
+            if tc and tc.get("skill_id"):
+                # Tool call was executed — send tool call + result
+                tool_call = ToolCall(
+                    session_id=session_id,
+                    skill_id=tc["skill_id"],
+                    params=tc.get("params", {}),
+                    confidence=tc.get("confidence", 1.0),
+                )
+                await websocket.send_text(tool_call.model_dump_json())
+
+                tool_result = ToolResult(
+                    session_id=session_id,
+                    tool_call_id=tool_call.tool_call_id,
+                    success=tc.get("result", {}).get("success", False),
+                    result={
+                        "response": response_text,
+                        "persona": result.get("message", {}).get("persona", "professional"),
+                        "detail": tc.get("result", {}).get("result"),
+                    },
+                )
+                await websocket.send_text(tool_result.model_dump_json())
+            else:
+                # Text response (no tool call) — send as a chat message
+                await websocket.send_text(json.dumps({
+                    "type": "assistant_message",
+                    "session_id": session_id,
+                    "content": response_text,
+                }))
 
     except WebSocketDisconnect:
         pass

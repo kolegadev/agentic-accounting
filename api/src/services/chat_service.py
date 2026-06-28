@@ -176,44 +176,6 @@ class ChatService:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
-        # ── Check for setup wizard ──────────────────────────────────
-        setup_step = context.get("_setup_step")
-        if setup_step and setup_step != "complete":
-            try:
-                from src.config.database import get_db
-                async for db in get_db():
-                    wizard_result = await self._wizard.handle_step(
-                        db, setup_step, message, context.get("_setup_context", {})
-                    )
-                    break
-                else:
-                    wizard_result = {"next_step": "welcome", "response": "Database unavailable — try again.", "setup_context": {}}
-            except Exception as exc:
-                logger.exception("Setup wizard failed")
-                wizard_result = {"next_step": "welcome", "response": f"Setup error: {exc}", "setup_context": {}}
-
-            context["_setup_step"] = wizard_result["next_step"]
-            context["_setup_context"] = wizard_result.get("setup_context", {})
-
-            assistant_content = wizard_result["response"]
-            history.append({
-                "role": "assistant",
-                "content": assistant_content,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-            if len(history) > MAX_HISTORY:
-                history = history[-MAX_HISTORY:]
-
-            state["history"] = history
-            state["context"] = context
-            await self.save_conversation_state(session_id, state)
-
-            return {
-                "session_id": session_id,
-                "message": {"text": assistant_content, "persona": persona, "tone": _TONE[persona]["style"]},
-                "history": history,
-            }
-
         # ── LLM Router ──────────────────────────────────────────────
         account_count = await self._get_account_count()
         try:
@@ -221,45 +183,6 @@ class ChatService:
         except Exception as exc:
             logger.exception("LLM routing failed")
             route_result = {"response": f"I'm having trouble understanding. Could you rephrase? ({exc})"}
-
-        # ── Setup detection ──────────────────────────────────────────
-        if route_result.get("setup_required"):
-            context["_setup_step"] = route_result.get("step", "welcome")
-            context["_setup_context"] = {}
-            # Recurse into process message to run wizard's welcome step
-            try:
-                from src.config.database import get_db
-                async for db in get_db():
-                    wizard_result = await self._wizard.handle_step(
-                        db, "welcome", message, {}
-                    )
-                    break
-                else:
-                    wizard_result = {"next_step": "welcome", "response": "Database unavailable.", "setup_context": {}}
-            except Exception as exc:
-                wizard_result = {"next_step": "welcome", "response": f"Setup error: {exc}", "setup_context": {}}
-
-            context["_setup_step"] = wizard_result["next_step"]
-            context["_setup_context"] = wizard_result.get("setup_context", {})
-
-            assistant_content = wizard_result["response"]
-            history.append({
-                "role": "assistant",
-                "content": assistant_content,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-            if len(history) > MAX_HISTORY:
-                history = history[-MAX_HISTORY:]
-
-            state["history"] = history
-            state["context"] = context
-            await self.save_conversation_state(session_id, state)
-
-            return {
-                "session_id": session_id,
-                "message": {"text": assistant_content, "persona": persona, "tone": _TONE[persona]["style"]},
-                "history": history,
-            }
 
         # ── Tool execution ───────────────────────────────────────────
         tool_call: dict[str, Any] | None = None

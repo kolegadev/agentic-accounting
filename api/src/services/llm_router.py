@@ -116,15 +116,9 @@ class LLMRouter:
           {"response": "text"}                       — chat reply
           {"setup_required": true, "step": "welcome"} — start setup wizard
         """
-        # 1) Check if setup is needed (empty COA)
-        if account_count == 0:
-            setup_result = await self._check_setup(user_message, account_count)
-            if setup_result.get("setup_required"):
-                return setup_result
-
-        # 2) Build prompt with tools + context
+        # 1) Build prompt with tools + context (inject setup context if fresh)
         tools = self._registry.list_skills()
-        prompt = self._build_system_prompt(tools, history, context)
+        prompt = self._build_system_prompt(tools, history, context, account_count)
 
         # 3) Call LLM
         raw = await self._call_llm(prompt, user_message)
@@ -140,8 +134,15 @@ class LLMRouter:
         tools: list[dict[str, Any]],
         history: list[dict[str, Any]],
         context: dict[str, Any],
+        account_count: int = 0,
     ) -> str:
         """Build the full system prompt with tools and context."""
+        # Inject setup context if system is fresh
+        setup_extra = ""
+        if account_count == 0:
+            from src.services.setup_wizard import SetupWizard
+            setup_extra = SetupWizard.get_setup_prompt()
+
         # Build a compact tool list (id, name, description, params, example)
         tool_snippets: list[dict[str, Any]] = []
         for t in tools:
@@ -166,11 +167,12 @@ class LLMRouter:
                 content = content[:300] + "..."
             context_lines.append(f"[{role}] {content}")
 
-        return SYSTEM_PROMPT.format(
-            today=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            tools_json=tools_json,
-            context="\n".join(context_lines) if context_lines else "(no prior conversation)",
-        )
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        ctx_str = "\n".join(context_lines) if context_lines else "(no prior conversation)"
+        result = SYSTEM_PROMPT.replace("{today}", today).replace("{tools_json}", tools_json).replace("{context}", ctx_str)
+        if setup_extra:
+            result += "\n" + setup_extra
+        return result
 
     async def _call_llm(self, system_prompt: str, user_message: str) -> str:
         """Call the LLM API and return the raw response text."""
@@ -250,18 +252,17 @@ class LLMRouter:
         self,
         user_message: str,
         account_count: int,
+        history: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        """Determine if we need to run the setup wizard."""
-        # If COA is empty, check if user is trying to set up
-        if account_count == 0:
-            setup_keywords = (
-                "set up", "setup", "start", "new", "begin", "create company",
-                "register", "onboard", "get started", "help", "hello", "hi",
-            )
-            msg_lower = user_message.lower()
-            if any(kw in msg_lower for kw in setup_keywords):
-                return {"setup_required": True, "step": "welcome"}
-            # User might be asking something unrelated — still flag setup
+        """Only force setup wizard on the very first message. After that,
+        let the LLM handle routing — it will naturally guide the user
+        through setup by calling the appropriate tools."""
+        if account_count > 0:
+            return {"setup_required": False}
+
+        # Only intercept the first-ever message (no history yet).
+        # The LLM is perfectly capable of guiding setup via natural conversation.
+        if len(history) <= 1:
             return {"setup_required": True, "step": "welcome"}
 
         return {"setup_required": False}
