@@ -95,11 +95,6 @@ async def websocket_chat(ws: WebSocket):
     await ws.send_text(json.dumps({
         "type": "connected",
         "session_id": session_id,
-        "content": (
-            "👋 Welcome to Agentic Accounting! I can help you with bookkeeping, "
-            "invoicing, VAT returns, bank reconciliation, and financial reports. "
-            "What would you like to do?"
-        ),
     }))
 
     try:
