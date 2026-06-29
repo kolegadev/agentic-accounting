@@ -740,16 +740,121 @@ async def _report_trial_balance(db: AsyncSession, params: dict) -> Any:
     )
 
 
+async def _direct_pl(db: AsyncSession, start_date: date, end_date: date) -> dict:
+    """Direct Profit & Loss: Revenue - Expenses = Net Profit."""
+    from src.services.coa_service import CoaService
+    from src.services.formatting import render_table, format_pence
+    from sqlalchemy import select, func
+    from src.models.transaction import Posting, Transaction
+    accounts = await CoaService.list_accounts(db)
+    revenue_total = 0
+    expense_total = 0
+    income_rows = []
+    expense_rows = []
+    for acct in accounts:
+        debit_q = select(func.coalesce(func.sum(Posting.debit_amount), 0)).where(
+            Posting.account_id == acct.id,
+            Posting.transaction_id.in_(
+                select(Transaction.id).where(Transaction.effective_date.between(start_date, end_date))
+            )
+        )
+        credit_q = select(func.coalesce(func.sum(Posting.credit_amount), 0)).where(
+            Posting.account_id == acct.id,
+            Posting.transaction_id.in_(
+                select(Transaction.id).where(Transaction.effective_date.between(start_date, end_date))
+            )
+        )
+        debits = (await db.execute(debit_q)).scalar() or 0
+        credits = (await db.execute(credit_q)).scalar() or 0
+        if acct.category == "Revenue":
+            net = credits - debits
+            revenue_total += net
+            if net != 0:
+                income_rows.append({"name": acct.name, "amount": format_pence(net)})
+        elif acct.category == "Expense":
+            net = debits - credits
+            expense_total += net
+            if net != 0:
+                expense_rows.append({"name": acct.name, "amount": format_pence(net)})
+    net_profit = revenue_total - expense_total
+    rows = income_rows + expense_rows
+    rows.append({"name": "**Net Profit / (Loss)**", "amount": format_pence(net_profit)})
+    return render_table(rows, [("name", "Description"), ("amount", "Amount (£)")])
+
+
+async def _direct_bs(db: AsyncSession, as_at: date) -> dict:
+    """Direct Balance Sheet: Assets = Liabilities + Equity."""
+    from src.services.coa_service import CoaService
+    from src.services.formatting import render_table, format_pence
+    from sqlalchemy import select, func
+    from src.models.transaction import Posting, Transaction
+    accounts = await CoaService.list_accounts(db)
+    rows = []
+    asset_total = liability_total = equity_total = 0
+    for cat, label in [("Asset", "Assets"), ("Liability", "Liabilities"), ("Equity", "Equity")]:
+        cat_total = 0
+        sub_rows = []
+        for acct in accounts:
+            if acct.category != cat:
+                continue
+            debit_q = select(func.coalesce(func.sum(Posting.debit_amount), 0)).where(
+                Posting.account_id == acct.id,
+                Posting.transaction_id.in_(
+                    select(Transaction.id).where(Transaction.effective_date <= as_at)
+                )
+            )
+            credit_q = select(func.coalesce(func.sum(Posting.credit_amount), 0)).where(
+                Posting.account_id == acct.id,
+                Posting.transaction_id.in_(
+                    select(Transaction.id).where(Transaction.effective_date <= as_at)
+                )
+            )
+            debits = (await db.execute(debit_q)).scalar() or 0
+            credits = (await db.execute(credit_q)).scalar() or 0
+            if cat in ("Asset",):
+                balance = debits - credits
+            else:
+                balance = credits - debits
+            cat_total += balance
+            if balance != 0:
+                sub_rows.append({"name": acct.name, "amount": format_pence(balance)})
+        sub_rows.append({"name": f"**Total {label}**", "amount": format_pence(cat_total)})
+        rows.extend(sub_rows)
+    return render_table(rows, [("name", "Description"), ("amount", "Amount (£)")])
+
+
+async def _direct_aging(db: AsyncSession, report_type: str, as_at: date) -> dict:
+    """Direct Aged Receivables or Payables report."""
+    from src.services.formatting import render_table, format_pence
+    from src.services.contact_service import ContactService
+    contacts, _ = await ContactService.list_contacts(db)
+    rows = []
+    for c in contacts:
+        owing = c.total_invoiced - c.total_paid
+        if report_type == "aged_receivables" and owing > 0 and c.type in ("customer", "both", "other"):
+            rows.append({"name": c.name, "type": c.type, "owing": format_pence(owing)})
+        elif report_type == "aged_payables" and owing < 0 and c.type in ("supplier", "both", "other"):
+            rows.append({"name": c.name, "type": c.type, "owing": format_pence(abs(owing))})
+    return render_table(rows, [("name", "Contact"), ("type", "Type"), ("owing", "Outstanding (£)")])
+
+
 async def _report_run(db: AsyncSession, params: dict) -> Any:
-    from src.services.report_service import ReportService
-    report = await ReportService.run(
-        db,
-        report_type=str(params["report_type"]),
-        start_date=date.fromisoformat(params["start_date"]) if params.get("start_date") else None,
-        end_date=date.fromisoformat(params["end_date"]) if params.get("end_date") else None,
-        as_at_date=date.fromisoformat(params["as_at_date"]) if params.get("as_at_date") else None,
-    )
-    return report.model_dump()
+    """Route to the correct report handler based on report_type."""
+    report_type = str(params.get("report_type", "profit_and_loss"))
+    start_date = date.fromisoformat(params["start_date"]) if params.get("start_date") else date.today().replace(month=1, day=1)
+    end_date = date.fromisoformat(params["end_date"]) if params.get("end_date") else date.today()
+    as_at = date.fromisoformat(params["as_at_date"]) if params.get("as_at_date") else end_date
+
+    if report_type == "profit_and_loss":
+        return await _direct_pl(db, start_date, end_date)
+    elif report_type == "balance_sheet":
+        return await _direct_bs(db, as_at)
+    elif report_type == "trial_balance":
+        return await _report_trial_balance(db, {})
+    elif report_type in ("aged_receivables", "aged_payables"):
+        return await _direct_aging(db, report_type, as_at)
+    else:
+        return {"error": f"Unknown report type: {report_type}"}
 
 
 async def _report_list(db: AsyncSession, params: dict) -> Any:
