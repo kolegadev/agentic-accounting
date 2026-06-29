@@ -860,9 +860,16 @@ async def _report_run(db: AsyncSession, params: dict) -> Any:
 
 
 async def _report_list(db: AsyncSession, params: dict) -> Any:
-    from src.services.report_service import ReportService
-    templates = await ReportService.list_templates(db)
-    return [t.model_dump() for t in templates]
+    return {
+        "reports": [
+            {"name": "Profit & Loss", "type": "profit_and_loss", "description": "Revenue minus expenses over a date range"},
+            {"name": "Balance Sheet", "type": "balance_sheet", "description": "Assets, liabilities, and equity as at a date"},
+            {"name": "Trial Balance", "type": "trial_balance", "description": "All accounts with debit and credit balances"},
+            {"name": "Aged Receivables", "type": "aged_receivables", "description": "Outstanding customer invoices by age"},
+            {"name": "Aged Payables", "type": "aged_payables", "description": "Outstanding supplier bills by age"},
+        ],
+        "usage": "Use report.run with the report_type field to generate any of these reports."
+    }
 
 
 async def _report_schedule(db: AsyncSession, params: dict) -> Any:
