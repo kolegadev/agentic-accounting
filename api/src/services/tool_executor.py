@@ -80,9 +80,19 @@ class ToolExecutor:
 
 async def _coa_list(db: AsyncSession, params: dict) -> Any:
     from src.services.coa_service import CoaService
+    from src.services.formatting import render_table
     include = params.get("include_inactive", False)
     accounts = await CoaService.list_accounts(db, include_inactive=include)
-    return [a.model_dump() for a in accounts]
+    return render_table(
+        [a.model_dump() for a in accounts],
+        columns=[
+            ("code", "Code"),
+            ("name", "Account Name"),
+            ("category", "Category"),
+            ("type", "Type"),
+            ("vat_rate", "VAT"),
+        ],
+    )
 
 
 async def _coa_add_account(db: AsyncSession, params: dict) -> Any:
@@ -272,14 +282,25 @@ async def _gl_list_transactions(db: AsyncSession, params: dict) -> Any:
     contact_id = uuid.UUID(params["contact_id"]) if params.get("contact_id") else None
     limit = int(params.get("limit", 50))
 
+    from src.services.formatting import render_table, format_pence
     items, total = await TransactionService.list_transactions(
         db, date_from=date_from, date_to=date_to, contact_id=contact_id, limit=limit,
     )
-    return {
-        "transactions": [TransactionService._transaction_to_response(t).model_dump() for t in items],
-        "total": total,
-        "limit": limit,
-    }
+    rows = []
+    for t in items:
+        d = TransactionService._transaction_to_response(t).model_dump()
+        d["amount"] = format_pence(d.get("total_amount"))
+        rows.append(d)
+    return render_table(
+        rows,
+        columns=[
+            ("reference", "Ref"),
+            ("description", "Description"),
+            ("amount", "Amount"),
+            ("status", "Status"),
+            ("effective_date", "Date"),
+        ],
+    )
 
 
 async def _gl_transaction_detail(db: AsyncSession, params: dict) -> Any:
@@ -325,12 +346,23 @@ async def _contact_edit(db: AsyncSession, params: dict) -> Any:
 
 async def _contact_list(db: AsyncSession, params: dict) -> Any:
     from src.services.contact_service import ContactService
+    from src.services.formatting import render_table
     items, total = await ContactService.list_contacts(
         db,
         type=params.get("type"),
         search=params.get("search"),
     )
-    return {"contacts": [c.model_dump() for c in items], "total": total}
+    return render_table(
+        [c.model_dump() for c in items],
+        columns=[
+            ("name", "Name"),
+            ("type", "Type"),
+            ("email", "Email"),
+            ("phone", "Phone"),
+            ("city", "City"),
+            ("status", "Status"),
+        ],
+    )
 
 
 async def _contact_detail(db: AsyncSession, params: dict) -> Any:
@@ -480,12 +512,27 @@ async def _invoice_send(db: AsyncSession, params: dict) -> Any:
 
 async def _invoice_list(db: AsyncSession, params: dict) -> Any:
     from src.services.invoice_service import InvoiceService
+    from src.services.formatting import render_table, format_pence
     items, total = await InvoiceService.list_invoices(
         db,
         status=params.get("status", "all"),
         contact_id=uuid.UUID(params["contact_id"]) if params.get("contact_id") else None,
     )
-    return {"invoices": [i.model_dump() for i in items], "total": total}
+    rows = []
+    for inv in items:
+        d = inv.model_dump()
+        d["amount"] = format_pence(d.get("total_amount"))
+        rows.append(d)
+    return render_table(
+        rows,
+        columns=[
+            ("reference", "Invoice"),
+            ("status", "Status"),
+            ("amount", "Amount"),
+            ("issue_date", "Issued"),
+            ("due_date", "Due"),
+        ],
+    )
 
 
 async def _invoice_mark_paid(db: AsyncSession, params: dict) -> Any:

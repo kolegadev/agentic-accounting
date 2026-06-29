@@ -206,7 +206,12 @@ class ChatService:
 
         if tool_result is not None:
             if tool_result.get("success"):
-                parts.append(f"The user's request was successful. Tool result: {json.dumps(tool_result.get('result', {}), default=str)[:2000]}")
+                result_data = tool_result.get('result', {})
+                # If the tool pre-formatted the output, use it directly
+                if isinstance(result_data, dict) and "formatted" in result_data:
+                    return result_data["formatted"]
+                data_str = json.dumps(result_data, default=str)
+                parts.append(f"The user's request was successful. Tool result: {data_str[:8000]}")
             else:
                 parts.append(f"The user's request FAILED. Error: {tool_result.get('error', 'unknown')}")
         elif "tool" in route_result:
