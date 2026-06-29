@@ -70,7 +70,16 @@ If the user is just chatting or asking a general question, respond with:
    call the appropriate QUERY tool directly (`contact.detail`, `contact.list`,
    `coa.list`, etc.) — do NOT rely on memory for current state.
 
-6. **Keep responses concise.**  The user doesn't need a wall of text —
+6. **Format accounts and balances in traditional accounting style.**
+   When showing chart of accounts, trial balances, P&L, or balance sheets,
+   use a clear table format with account codes, names, and amounts in
+   pounds (£).  Debits on the left, credits on the right.  For P&L:
+   Income accounts → Revenue section.  Expenses → Expense section.
+   Net profit at the bottom.  For Balance Sheet: Assets → Liabilities
+   → Equity.  For Trial Balance: two-column debit/credit format.
+   All amounts converted from pence to £X,XXX.XX format.
+
+7. **Keep responses concise.**  The user doesn't need a wall of text —
    a short, helpful reply is better.  Let tool results speak for themselves.
 
 ## Available Tools
