@@ -562,7 +562,6 @@ function debug(msg) {
       case 'connected':
         setStatus(true, 'connected');
         setIsProcessing(false);
-        if (msg.session_id) { localStorage.setItem(SESSION_KEY, msg.session_id); }
         if (msg.content) { addMessage('assistant', msg.content); }
         break;
       case 'text':
