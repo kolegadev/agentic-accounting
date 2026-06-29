@@ -549,33 +549,39 @@ async def _vat_audit_trail(db: AsyncSession, params: dict) -> Any:
 
 async def _business_set_profile(db: AsyncSession, params: dict) -> Any:
     from src.services.contact_service import ContactService
-    from src.validators.contact import ContactCreate
+    from src.validators.contact import ContactCreate, ContactUpdate
     name = str(params.get("company_name", "My Business"))
-    data = ContactCreate(
-        name=name,
-        type="other",
-        company=params.get("company_name"),
-        address_line1=params.get("address_line1"),
-        address_line2=params.get("address_line2"),
-        city=params.get("city"),
-        postcode=params.get("postcode"),
-        country=params.get("country", "GB"),
-    )
-    contact = await ContactService.find_or_create(db, name=name)
-    if contact[1]:
-        # Newly created — return it
-        return contact[0].model_dump()
-    # Already exists — update it
-    from src.validators.contact import ContactUpdate
-    update = ContactUpdate(
-        address_line1=params.get("address_line1"),
-        address_line2=params.get("address_line2"),
-        city=params.get("city"),
-        postcode=params.get("postcode"),
-        country=params.get("country", "GB"),
-    )
-    updated = await ContactService.update_contact(db, contact[0].id, update)
-    return updated.model_dump()
+
+    # First check if this business is already stored
+    existing = await ContactService.find_or_create(db, name=name, email=None, vat_number=None)
+    contact, is_new = existing
+
+    if is_new:
+        # Newly auto-created by find_or_create as type="supplier" — fix the type
+        update = ContactUpdate(
+            type="other",
+            company=params.get("company_name"),
+            address_line1=params.get("address_line1"),
+            address_line2=params.get("address_line2"),
+            city=params.get("city"),
+            postcode=params.get("postcode"),
+            country=params.get("country", "GB"),
+        )
+        updated = await ContactService.update_contact(db, contact.id, update)
+        return updated.model_dump()
+    else:
+        # Already exists — update address if provided
+        update_data = {}
+        for field in ("address_line1", "address_line2", "city", "postcode", "country"):
+            if params.get(field):
+                update_data[field] = params[field]
+        if params.get("company_name"):
+            update_data["company"] = params["company_name"]
+        if update_data:
+            update = ContactUpdate(**update_data)
+            updated = await ContactService.update_contact(db, contact.id, update)
+            return updated.model_dump()
+    return contact.model_dump()
 
 
 # ── Memory ─────────────────────────────────────────────────────────
