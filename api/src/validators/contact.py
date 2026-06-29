@@ -8,7 +8,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-ContactType = Literal["customer", "supplier", "both"]
+ContactType = Literal["customer", "supplier", "both", "other"]
 ContactStatus = Literal["active", "archived"]
 
 

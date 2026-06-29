@@ -25,6 +25,7 @@ class ToolExecutor:
     # Map of supported tool IDs — everything in the registry that has a
     # corresponding service method.
     SUPPORTED_TOOLS: set[str] = {
+        "business.set_profile",
         "memory.search",
         "coa.list", "coa.add_account", "coa.edit_account", "coa.set_vat_rate",
         "coa.load_template",
@@ -544,6 +545,39 @@ async def _vat_audit_trail(db: AsyncSession, params: dict) -> Any:
     return [t.model_dump() for t in trail]
 
 
+# ── Business ───────────────────────────────────────────────────────
+
+async def _business_set_profile(db: AsyncSession, params: dict) -> Any:
+    from src.services.contact_service import ContactService
+    from src.validators.contact import ContactCreate
+    name = str(params.get("company_name", "My Business"))
+    data = ContactCreate(
+        name=name,
+        type="other",
+        company=params.get("company_name"),
+        address_line1=params.get("address_line1"),
+        address_line2=params.get("address_line2"),
+        city=params.get("city"),
+        postcode=params.get("postcode"),
+        country=params.get("country", "GB"),
+    )
+    contact = await ContactService.find_or_create(db, name=name)
+    if contact[1]:
+        # Newly created — return it
+        return contact[0].model_dump()
+    # Already exists — update it
+    from src.validators.contact import ContactUpdate
+    update = ContactUpdate(
+        address_line1=params.get("address_line1"),
+        address_line2=params.get("address_line2"),
+        city=params.get("city"),
+        postcode=params.get("postcode"),
+        country=params.get("country", "GB"),
+    )
+    updated = await ContactService.update_contact(db, contact[0].id, update)
+    return updated.model_dump()
+
+
 # ── Memory ─────────────────────────────────────────────────────────
 
 async def _memory_search(db: AsyncSession, params: dict) -> Any:
@@ -648,5 +682,6 @@ _HANDLERS: dict[str, Any] = {
     "report.run": _report_run,
     "report.list": _report_list,
     "report.schedule": _report_schedule,
+    "business.set_profile": _business_set_profile,
     "memory.search": _memory_search,
 }

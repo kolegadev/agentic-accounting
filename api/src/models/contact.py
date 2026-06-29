@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.config.database import Base
 
-VALID_TYPES = ("customer", "supplier", "both")
+VALID_TYPES = ("customer", "supplier", "both", "other")
 VALID_STATUSES = ("active", "archived")
 
 
