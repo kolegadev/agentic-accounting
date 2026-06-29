@@ -741,17 +741,19 @@ async def _report_trial_balance(db: AsyncSession, params: dict) -> Any:
 
 
 async def _direct_pl(db: AsyncSession, start_date: date, end_date: date) -> dict:
-    """Direct Profit & Loss: Revenue - Expenses = Net Profit."""
+    """Direct Profit & Loss with proper section headers and subtotals."""
     from src.services.coa_service import CoaService
     from src.services.formatting import render_table, format_pence
     from sqlalchemy import select, func
     from src.models.transaction import Posting, Transaction
     accounts = await CoaService.list_accounts(db)
+    income_rows = [{"section": "", "account": "**REVENUE**", "amount": ""}]
+    expense_rows = [{"section": "", "account": "**EXPENSES**", "amount": ""}]
     revenue_total = 0
     expense_total = 0
-    income_rows = []
-    expense_rows = []
     for acct in accounts:
+        if acct.category not in ("Revenue", "Expense"):
+            continue
         debit_q = select(func.coalesce(func.sum(Posting.debit_amount), 0)).where(
             Posting.account_id == acct.id,
             Posting.transaction_id.in_(
@@ -769,31 +771,32 @@ async def _direct_pl(db: AsyncSession, start_date: date, end_date: date) -> dict
         if acct.category == "Revenue":
             net = credits - debits
             revenue_total += net
-            if net != 0:
-                income_rows.append({"name": acct.name, "amount": format_pence(net)})
+            income_rows.append({"section": "", "account": "  " + acct.name, "amount": format_pence(net) if net else "£0.00"})
         elif acct.category == "Expense":
             net = debits - credits
             expense_total += net
-            if net != 0:
-                expense_rows.append({"name": acct.name, "amount": format_pence(net)})
+            expense_rows.append({"section": "", "account": "  " + acct.name, "amount": format_pence(net) if net else "£0.00"})
+    income_rows.append({"section": "", "account": "**Total Revenue**", "amount": format_pence(revenue_total)})
+    expense_rows.append({"section": "", "account": "**Total Expenses**", "amount": format_pence(expense_total)})
     net_profit = revenue_total - expense_total
-    rows = income_rows + expense_rows
-    rows.append({"name": "**Net Profit / (Loss)**", "amount": format_pence(net_profit)})
-    return render_table(rows, [("name", "Description"), ("amount", "Amount (£)")])
+    rows = income_rows + expense_rows + [
+        {"section": "", "account": "", "amount": ""},
+        {"section": "", "account": "**NET PROFIT / (LOSS)**", "amount": format_pence(net_profit)},
+    ]
+    return render_table(rows, [("account", "Account"), ("amount", "Amount (£)")])
 
 
 async def _direct_bs(db: AsyncSession, as_at: date) -> dict:
-    """Direct Balance Sheet: Assets = Liabilities + Equity."""
+    """Direct Balance Sheet with proper section headers and subtotals."""
     from src.services.coa_service import CoaService
     from src.services.formatting import render_table, format_pence
     from sqlalchemy import select, func
     from src.models.transaction import Posting, Transaction
     accounts = await CoaService.list_accounts(db)
     rows = []
-    asset_total = liability_total = equity_total = 0
-    for cat, label in [("Asset", "Assets"), ("Liability", "Liabilities"), ("Equity", "Equity")]:
+    for cat, label in [("Asset", "ASSETS"), ("Liability", "LIABILITIES"), ("Equity", "EQUITY")]:
+        rows.append({"account": f"**{label}**", "amount": ""})
         cat_total = 0
-        sub_rows = []
         for acct in accounts:
             if acct.category != cat:
                 continue
@@ -811,16 +814,15 @@ async def _direct_bs(db: AsyncSession, as_at: date) -> dict:
             )
             debits = (await db.execute(debit_q)).scalar() or 0
             credits = (await db.execute(credit_q)).scalar() or 0
-            if cat in ("Asset",):
+            if cat == "Asset":
                 balance = debits - credits
             else:
                 balance = credits - debits
             cat_total += balance
-            if balance != 0:
-                sub_rows.append({"name": acct.name, "amount": format_pence(balance)})
-        sub_rows.append({"name": f"**Total {label}**", "amount": format_pence(cat_total)})
-        rows.extend(sub_rows)
-    return render_table(rows, [("name", "Description"), ("amount", "Amount (£)")])
+            rows.append({"account": "  " + acct.name, "amount": format_pence(balance)})
+        rows.append({"account": f"**Total {label.title()}**", "amount": format_pence(cat_total)})
+        rows.append({"account": "", "amount": ""})
+    return render_table(rows, [("account", "Account"), ("amount", "Amount (£)")])
 
 
 async def _direct_aging(db: AsyncSession, report_type: str, as_at: date) -> dict:
