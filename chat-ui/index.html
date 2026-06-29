@@ -486,7 +486,7 @@ function debug(msg) {
     var host = location.hostname === 'localhost' || location.hostname === '::1'
       ? '127.0.0.1:' + location.port
       : location.host;
-    var url = protocol + '//' + host + '/ws/chat';
+    var url = protocol + '//' + host + '/ws/chat?v=' + Date.now();
     debug('WebSocket URL: ' + url);
 
     statusText.textContent = 'connecting to ' + url + '...';
