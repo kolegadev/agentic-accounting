@@ -58,6 +58,8 @@ If the user is just chatting or asking a general question, respond with:
 3. **Only call tools that exist** in the registry below.  If no matching
    tool exists, respond with: {{"response": "<clarifying question>"}}
 
+3.5 **When the user asks about a SPECIFIC account by code (e.g., "show account detail for code 1000"), use `coa.detail`.** Provide the account code. NEVER re-list the full COA.
+
 4. **For chart of accounts setup: ALWAYS use `coa.load_template`.**
    NEVER list individual accounts in your response text during setup.
    When the user asks to SEE the chart of accounts, call `coa.list`

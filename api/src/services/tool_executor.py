@@ -29,6 +29,7 @@ class ToolExecutor:
         "memory.search",
         "coa.list", "coa.add_account", "coa.edit_account", "coa.set_vat_rate",
         "coa.load_template",
+        "coa.detail",
         "gl.record_expense", "gl.record_income", "gl.record_transfer",
         "gl.journal_entry", "gl.list_transactions", "gl.transaction_detail",
         "gl.undo_transaction",
@@ -125,6 +126,35 @@ async def _coa_load_template(db: AsyncSession, params: dict) -> Any:
         "loaded": len(accounts),
         "template": params["template_name"],
         "accounts": [{"code": a.code, "name": a.name, "category": a.category} for a in accounts],
+    }
+
+
+async def _coa_detail(db: AsyncSession, params: dict) -> Any:
+    from src.services.coa_service import CoaService
+    from src.services.transaction_service import TransactionService
+    code = str(params["code"])
+    account = await CoaService.get_account_by_code(db, code)
+    if not account:
+        return {"error": f"Account {code} not found"}
+    acct_data = account.model_dump()
+    # Also get recent transactions for this account
+    transactions, total = await TransactionService.list_transactions(db, limit=10)
+    recent = []
+    for tx in transactions:
+        txd = TransactionService._transaction_to_response(tx).model_dump()
+        for p in txd.get("postings", []):
+            if p.get("account_code") == code:
+                recent.append({
+                    "date": str(txd.get("effective_date", "")),
+                    "description": txd.get("description", ""),
+                    "reference": txd.get("reference", ""),
+                    "debit": p.get("debit_amount", 0),
+                    "credit": p.get("credit_amount", 0),
+                })
+    return {
+        "account": acct_data,
+        "recent_transactions": recent[:20],
+        "total_transactions": total,
     }
 
 
@@ -698,6 +728,7 @@ _HANDLERS: dict[str, Any] = {
     "coa.add_account": _coa_add_account,
     "coa.edit_account": _coa_edit_account,
     "coa.load_template": _coa_load_template,
+    "coa.detail": _coa_detail,
     "coa.set_vat_rate": _coa_set_vat_rate,
     "gl.record_expense": _gl_record_expense,
     "gl.record_income": _gl_record_income,

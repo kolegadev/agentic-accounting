@@ -110,8 +110,8 @@
   .md-table th, .md-table td { padding: 4px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08); }
   .md-table th { font-weight: 600; color: var(--blue); border-bottom: 2px solid rgba(255,255,255,0.15); }
   .md-table tr:hover { background: rgba(255,255,255,0.03); }
-  .clickable-cell { cursor: pointer; transition: color 0.15s; }
-  .clickable-cell:hover { color: var(--accent); text-decoration: underline; }
+  .clickable-cell { cursor: pointer; transition: all 0.15s; border-bottom: 1px dashed transparent; }
+  .clickable-cell:hover { color: var(--accent); border-bottom-color: var(--accent); background: rgba(78,201,176,0.05); border-radius: 2px; }
 
   .msg.user .msg-bubble {
     background: var(--accent);
@@ -719,13 +719,12 @@ function debug(msg) {
   }
 
   function sendTableCellQuery(el) {
-    var val = el.getAttribute('data-value');
     var tr = el.closest('tr');
-    // Get the account name (2nd column) and code (1st column)
     var allCells = tr.querySelectorAll('.clickable-cell');
     var code = allCells.length > 0 ? allCells[0].getAttribute('data-value') : '';
-    var name = allCells.length > 1 ? allCells[1].getAttribute('data-value') : val;
-    var query = 'show me details for account ' + code + ' ' + name;
+    var name = allCells.length > 1 ? allCells[1].getAttribute('data-value') : '';
+    // Use the tool call format so the LLM calls coa.detail directly
+    var query = 'show account detail for code ' + code;
     input.value = query;
     sendMessage();
   }

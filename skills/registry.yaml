@@ -567,3 +567,14 @@
       vat_number: {type: string}
     required: [company_name]
   example: "Set my business address to Villa Camellia, La Rue Des Murs, St Lawrence, Jersey JE3 1EB"
+
+- id: "coa.detail"
+  category: "COA"
+  name: "Account Detail"
+  description: "Show details and transactions for a specific account by its code. Use when the user asks about a specific account or its transactions."
+  inputSchema:
+    type: object
+    properties:
+      code: {type: string, description: "Account code e.g. 1000, 5000"}
+    required: [code]
+  example: "Show me details for account 1000"
