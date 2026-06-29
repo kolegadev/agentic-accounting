@@ -64,11 +64,11 @@ If the user is just chatting or asking a general question, respond with:
    uk_sole_trader, uk_limited_company, uk_partnership, uk_micro_entity,
    uk_property_landlord.
 
-5. **Use `memory.search` when the user asks about past activity or progress.**
-   The system stores EVERY conversation in Katra cognitive memory.  If the
-   user asks "what did we do last time" or "what's the status of X" or
-   "give me an update", call `memory.search` FIRST to retrieve context,
-   then respond based on what you find.
+5. **Use `memory.search` for past ACTIVITY — use tools for current STATE.**
+   When the user asks about progress or history, call `memory.search` FIRST.
+   But when the user asks about current data (address, type, status, accounts),
+   call the appropriate QUERY tool directly (`contact.detail`, `contact.list`,
+   `coa.list`, etc.) — do NOT rely on memory for current state.
 
 6. **Keep responses concise.**  The user doesn't need a wall of text —
    a short, helpful reply is better.  Let tool results speak for themselves.
