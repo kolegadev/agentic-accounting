@@ -89,7 +89,9 @@ async def websocket_chat(ws: WebSocket):
     """
     await ws.accept()
 
-    session_id = str(uuid.uuid4())
+    # Accept client-supplied session_id if provided (enables session persistence across refreshes)
+    client_sid = ws.query_params.get("session_id")
+    session_id = client_sid if client_sid else str(uuid.uuid4())
     backend_ws_url = f"{API_BASE_URL.replace('http', 'ws')}/api/v1/ws/chat/{session_id}"
 
     await ws.send_text(json.dumps({
