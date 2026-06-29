@@ -97,7 +97,16 @@
     line-height: 1.55;
     font-size: 14px;
     word-wrap: break-word;
+    white-space: pre-wrap;
+    overflow-x: auto;
   }
+  .md-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+  .md-table th, .md-table td { padding: 4px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .md-table th { font-weight: 600; color: var(--blue); border-bottom: 2px solid rgba(255,255,255,0.15); }
+  .md-table tr:hover { background: rgba(255,255,255,0.03); }
+  .clickable-cell { cursor: pointer; transition: color 0.15s; }
+  .clickable-cell:hover { color: var(--accent); text-decoration: underline; }
+
   .msg.user .msg-bubble {
     background: var(--accent);
     color: var(--accent-text);
@@ -655,8 +664,12 @@ function debug(msg) {
 
   function renderMarkdown(text) {
     if (!text) return '';
+    // Split into blocks: tables (|...| lines) vs regular text
+    var lines = text.split('\n');
+    if (lines.some(function(l) { return l.indexOf('|') === 0 && l.indexOf('---') >= 0; })) {
+      return renderTable(text);
+    }
     return text
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -665,7 +678,50 @@ function debug(msg) {
       .replace(/^## (.+)/gm, '<strong>$1</strong>')
       .replace(/^# (.+)/gm, '<strong>$1</strong>')
       .replace(/^- (.+)/gm, '\u2022 $1')
-      .replace(/\\n/g, '<br>');
+      .replace(/\n/g, '<br>')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderTable(text) {
+    var lines = text.split('\n');
+    var html = '<table class="md-table">';
+    var inHead = true;
+    var rows = []; // collect row data for click handlers
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line || line.indexOf('|') !== 0) continue;
+      var cells = line.replace(/^\\|/, '').replace(/\\|$/, '').split('|');
+      var isSep = cells.every(function(c) { return /^\\s*-+\\s*$/.test(c); });
+      if (isSep) { inHead = false; continue; }
+      if (!inHead) {
+        rows.push(cells.map(function(c) { return c.trim(); }));
+      }
+      html += '<tr>';
+      var tag = inHead ? 'th' : 'td';
+      for (var j = 0; j < cells.length; j++) {
+        var val = esc(cells[j].trim());
+        if (!inHead) {
+          // Clickable data cells — clicking sends a query
+          val = '<span class="clickable-cell" onclick="event.stopPropagation(); sendTableCellQuery(this)" data-value="' + esc(cells[j].trim()) + '" data-row="' + (rows.length - 1) + '">' + val + '</span>';
+        }
+        html += '<' + tag + '>' + val + '</' + tag + '>';
+      }
+      html += '</tr>';
+    }
+    html += '</table>';
+    return html;
+  }
+
+  function sendTableCellQuery(el) {
+    var val = el.getAttribute('data-value');
+    var tr = el.closest('tr');
+    // Get the account name (2nd column) and code (1st column)
+    var allCells = tr.querySelectorAll('.clickable-cell');
+    var code = allCells.length > 0 ? allCells[0].getAttribute('data-value') : '';
+    var name = allCells.length > 1 ? allCells[1].getAttribute('data-value') : val;
+    var query = 'show me details for account ' + code + ' ' + name;
+    input.value = query;
+    sendMessage();
   }
 
   function esc(s) {
