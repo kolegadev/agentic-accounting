@@ -471,8 +471,6 @@ function debug(msg) {
   var pendingConfirm = false;
   var isProcessing = false;
 
-  var SESSION_KEY = 'acct_session_id';
-
   function connect() {
     debug('connect() called');
     var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -480,9 +478,6 @@ function debug(msg) {
       ? '127.0.0.1:' + location.port
       : location.host;
     var url = protocol + '//' + host + '/ws/chat';
-    // Persist session across refreshes via localStorage
-    var sid = localStorage.getItem(SESSION_KEY);
-    if (sid) { url += '?session_id=' + encodeURIComponent(sid); }
     debug('WebSocket URL: ' + url);
 
     statusText.textContent = 'connecting to ' + url + '...';

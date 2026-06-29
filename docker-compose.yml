@@ -227,7 +227,7 @@ services:
     environment:
       PORT: "9013"
       MCP_PORT: "3113"
-      MONGO_URI: mongodb://katra_admin:${KATRA_MONGO_PASS:-katra-accounting-2026}@accounting-katra-mongo:27017/katra_accounting?authSource=admin
+      MONGODB_URI: mongodb://katra_admin:${KATRA_MONGO_PASS:-katra-accounting-2026}@accounting-katra-mongo:27017/katra_accounting?authSource=admin
       REDIS_URL: redis://accounting-katra-redis:6379
       MINIO_ENDPOINT: accounting-katra-minio
       MINIO_PORT: "9000"

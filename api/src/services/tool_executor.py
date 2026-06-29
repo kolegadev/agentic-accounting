@@ -25,6 +25,7 @@ class ToolExecutor:
     # Map of supported tool IDs — everything in the registry that has a
     # corresponding service method.
     SUPPORTED_TOOLS: set[str] = {
+        "memory.search",
         "coa.list", "coa.add_account", "coa.edit_account", "coa.set_vat_rate",
         "coa.load_template",
         "gl.record_expense", "gl.record_income", "gl.record_transfer",
@@ -543,6 +544,34 @@ async def _vat_audit_trail(db: AsyncSession, params: dict) -> Any:
     return [t.model_dump() for t in trail]
 
 
+# ── Memory ─────────────────────────────────────────────────────────
+
+async def _memory_search(db: AsyncSession, params: dict) -> Any:
+    import httpx, os
+    katra_url = os.getenv("KATRA_MCP_URL", "http://accounting-katra-server:3113")
+    admin_url = katra_url.replace("/mcp", "").replace(":3113", ":9013") + "/api/v1/memory/episodic/events"
+    query = params.get("query", "")
+    limit = int(params.get("limit", 5))
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{admin_url}?limit={limit}",
+                headers={"Authorization": "Bearer katra-admin-key-2026"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            results = data.get("results", data.get("events", []))
+            return {
+                "found": len(results),
+                "events": [
+                    {"timestamp": e.get("timestamp",""), "content": e.get("content",""), "session_id": e.get("session_id","")}
+                    for e in (results if isinstance(results, list) else [results])
+                ],
+            }
+    except Exception as exc:
+        return {"found": 0, "events": [], "error": str(exc)}
+
+
 # ── Reports ─────────────────────────────────────────────────────────
 
 async def _report_run(db: AsyncSession, params: dict) -> Any:
@@ -619,4 +648,5 @@ _HANDLERS: dict[str, Any] = {
     "report.run": _report_run,
     "report.list": _report_list,
     "report.schedule": _report_schedule,
+    "memory.search": _memory_search,
 }

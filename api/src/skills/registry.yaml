@@ -537,3 +537,15 @@
       email_to: {type: string, format: email}
     required: [report_type, frequency]
   example: "Send me a P&L report every month"
+
+- id: "memory.search"
+  category: "Memory"
+  name: "Search Katra Memory"
+  description: "Search past conversations and events in Katra cognitive memory. Use when the user asks about previous discussions, progress, or what was done before. NEVER say you don't remember — search memory first."
+  inputSchema:
+    type: object
+    properties:
+      query: {type: string, description: "Search query — use key terms from the user's question"}
+      limit: {type: integer, default: 5, description: "Max results"}
+    required: [query]
+  example: "Search memory for Sweet Moments company setup progress"
