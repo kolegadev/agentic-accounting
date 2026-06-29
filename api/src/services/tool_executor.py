@@ -44,6 +44,7 @@ class ToolExecutor:
         "vat.preview_return", "vat.transaction_detail", "vat.adjustment",
         "vat.audit_trail",
         "report.run", "report.list", "report.schedule",
+        "report.trial_balance",
     }
 
     # ------------------------------------------------------------------
@@ -691,6 +692,54 @@ async def _memory_search(db: AsyncSession, params: dict) -> Any:
 
 # ── Reports ─────────────────────────────────────────────────────────
 
+async def _report_trial_balance(db: AsyncSession, params: dict) -> Any:
+    from src.services.coa_service import CoaService
+    from src.services.formatting import render_table, format_pence
+    from sqlalchemy import select, func
+    from src.models.transaction import Posting
+    accounts = await CoaService.list_accounts(db)
+    rows = []
+    total_debits = 0
+    total_credits = 0
+    for acct in accounts:
+        # Sum debits and credits for this account
+        debit_result = await db.execute(
+            select(func.coalesce(func.sum(Posting.debit_amount), 0))
+            .where(Posting.account_id == acct.id)
+        )
+        credit_result = await db.execute(
+            select(func.coalesce(func.sum(Posting.credit_amount), 0))
+            .where(Posting.account_id == acct.id)
+        )
+        debits = debit_result.scalar() or 0
+        credits = credit_result.scalar() or 0
+        net = debits - credits
+        total_debits += max(net, 0)
+        total_credits += max(-net, 0) if net < 0 else 0
+        rows.append({
+            "code": acct.code,
+            "name": acct.name,
+            "category": acct.category,
+            "debit": format_pence(net) if net > 0 else "",
+            "credit": format_pence(abs(net)) if net < 0 else "",
+        })
+    # Add totals row
+    rows.append({
+        "code": "", "name": "**TOTALS**", "category": "",
+        "debit": format_pence(total_debits), "credit": format_pence(total_credits),
+    })
+    return render_table(
+        rows,
+        columns=[
+            ("code", "Code"),
+            ("name", "Account"),
+            ("category", "Category"),
+            ("debit", "Debit (£)"),
+            ("credit", "Credit (£)"),
+        ],
+    )
+
+
 async def _report_run(db: AsyncSession, params: dict) -> Any:
     from src.services.report_service import ReportService
     report = await ReportService.run(
@@ -763,6 +812,7 @@ _HANDLERS: dict[str, Any] = {
     "vat.transaction_detail": _vat_transaction_detail,
     "vat.adjustment": _vat_adjustment,
     "vat.audit_trail": _vat_audit_trail,
+    "report.trial_balance": _report_trial_balance,
     "report.run": _report_run,
     "report.list": _report_list,
     "report.schedule": _report_schedule,

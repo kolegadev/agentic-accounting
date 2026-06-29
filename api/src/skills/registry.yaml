@@ -578,3 +578,12 @@
       code: {type: string, description: "Account code e.g. 1000, 5000"}
     required: [code]
   example: "Show me details for account 1000"
+
+- id: "report.trial_balance"
+  category: "Report"
+  name: "Trial Balance"
+  description: "Generate a trial balance showing all accounts with their debit and credit balances. Use this when the user asks for account balances, trial balance, or a summary of all accounts with their current values."
+  inputSchema:
+    type: object
+    properties: {}
+  example: "Show me the trial balance"
