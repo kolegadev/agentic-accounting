@@ -42,41 +42,97 @@ class KatraClient:
         api_key: Optional[str] = None,
         user_id: str = "accounting-agent",
     ) -> None:
-        self.base_url = (base_url or KATRA_URL).rstrip("/")
+        full_url = (base_url or KATRA_URL).rstrip("/")
+        self.base_url = full_url.rsplit("/", 1)[0]  # e.g. http://host:3113
         self.api_key = api_key or KATRA_API_KEY
         self.user_id = user_id
         self._request_id: int = 0
+        self._mcp_message_url: str | None = None  # set after SSE handshake
 
     @property
     def enabled(self) -> bool:
         """Katra is enabled only when KATRA_ENABLED is true and a URL is set."""
         return KATRA_ENABLED and bool(self.base_url)
 
-    # ── low-level MCP transport ──────────────────────────────────────
+    def _headers(self) -> dict[str, str]:
+        h: dict[str, str] = {"Content-Type": "application/json"}
+        if self.api_key:
+            h["Authorization"] = f"Bearer {self.api_key}"
+        return h
 
-    async def _call(self, method: str, params: Optional[dict] = None) -> dict:
-        """Send a JSON-RPC 2.0 call to the Katra MCP endpoint."""
+    # ── MCP SSE handshake ────────────────────────────────────────────
+
+    async def _ensure_initialized(self) -> None:
+        """Perform the MCP SSE handshake if not already done.
+
+        MCP SSE flow:
+        1. GET /sse → receive endpoint event with message URI
+        2. POST initialize to that URI
+        """
+        if self._mcp_message_url is not None:
+            return
+
+        headers = self._headers()
+        headers["Accept"] = "text/event-stream"
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            # Step 1: open SSE and read the endpoint event
+            async with client.stream("GET", f"{self.base_url}/sse", headers=headers) as resp:
+                resp.raise_for_status()
+                buffer = ""
+                async for chunk in resp.aiter_text():
+                    buffer += chunk
+                    # Parse SSE: look for "event: endpoint\ndata: {...}\n\n"
+                    while "\n\n" in buffer:
+                        event_block, buffer = buffer.split("\n\n", 1)
+                        if "event: endpoint" in event_block:
+                            for line in event_block.split("\n"):
+                                if line.startswith("data: "):
+                                    data = json.loads(line[6:])
+                                    self._mcp_message_url = data.get("uri", "/message")
+                                    break
+                        if self._mcp_message_url:
+                            break
+                    if self._mcp_message_url:
+                        break
+
+        if not self._mcp_message_url:
+            self._mcp_message_url = "/message"  # fallback
+
+        # Step 2: initialize
+        try:
+            await self._call_raw("initialize", {
+                "protocolVersion": "0.1.0",
+                "clientInfo": {"name": "accounting-chat", "version": "0.1.0"},
+            })
+        except KatraError:
+            pass  # some servers don't require explicit init, keep going
+
+    async def _call_raw(self, method: str, params: Optional[dict] = None) -> dict:
+        """Send JSON-RPC without handshake check (used during init)."""
         self._request_id += 1
-        payload: dict[str, Any] = {
+        payload = {
             "jsonrpc": "2.0",
             "id": self._request_id,
             "method": method,
             "params": params or {},
         }
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-
+        url = f"{self.base_url}{self._mcp_message_url or '/message'}"
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(self.base_url, json=payload, headers=headers)
+            resp = await client.post(url, json=payload, headers=self._headers())
             resp.raise_for_status()
             body = resp.json()
             if "error" in body:
                 err = body["error"]
-                raise KatraError(
-                    f"Katra error {err.get('code')}: {err.get('message')}"
-                )
+                raise KatraError(f"Katra error {err.get('code')}: {err.get('message')}")
             return body.get("result", {})
+
+    # ── low-level MCP transport ──────────────────────────────────────
+
+    async def _call(self, method: str, params: Optional[dict] = None) -> dict:
+        """Send a JSON-RPC 2.0 call, ensuring MCP handshake first."""
+        await self._ensure_initialized()
+        return await self._call_raw(method, params)
 
     # ── episodic memory (conversation persistence) ───────────────────
 
