@@ -12,6 +12,8 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.services.instrument import log_event
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,7 +29,8 @@ class ToolExecutor:
     SUPPORTED_TOOLS: set[str] = {
         "business.set_profile",
         "memory.search",
-        "coa.list", "coa.add_account", "coa.edit_account", "coa.set_vat_rate",
+        "coa.list", "coa.add_account", "coa.edit_account", "coa.delete_account",
+        "coa.set_vat_rate",
         "coa.load_template",
         "coa.detail",
         "gl.record_expense", "gl.record_income", "gl.record_transfer",
@@ -68,7 +71,24 @@ class ToolExecutor:
             handler = _HANDLERS.get(skill_id)
             if handler is None:
                 return {"success": False, "error": f"No handler for tool: {skill_id}"}
+            # ── I6: tool execution path ──────────────────────────────
+            log_event(
+                module="tool_executor", function="execute", event="entry",
+                state_snapshot={
+                    "skill_id": skill_id,
+                    "params_keys": list(params.keys()) if params else [],
+                    "handler_exists": handler is not None,
+                    "via_mcp_gateway": False,
+                },
+            )
             result = await handler(db, params)
+            log_event(
+                module="tool_executor", function="execute", event="exit",
+                state_snapshot={
+                    "skill_id": skill_id,
+                    "success": True,
+                },
+            )
             return {"success": True, "result": result}
         except Exception as exc:
             logger.exception("Tool %s failed: %s", skill_id, exc)
@@ -113,11 +133,64 @@ async def _coa_add_account(db: AsyncSession, params: dict) -> Any:
 
 
 async def _coa_edit_account(db: AsyncSession, params: dict) -> Any:
+    """Edit an account — accepts either account_id (UUID) or code (string)."""
     from src.services.coa_service import CoaService
     from src.validators.account import AccountUpdate
-    data = AccountUpdate(**{k: v for k, v in params.items() if k != "account_id" and v is not None})
-    account = await CoaService.update_account(db, uuid.UUID(params["account_id"]), data)
+    from src.models.account import Account
+    from sqlalchemy import select
+
+    # Resolve account by code if account_id not provided
+    account_id = params.get("account_id")
+    if not account_id and "code" in params:
+        code = str(params["code"])
+        stmt = select(Account).where(Account.code == code)
+        result = await db.execute(stmt)
+        acct = result.scalar_one_or_none()
+        if acct is None:
+            return {"edited": False, "reason": f"No account with code {code}"}
+        account_id = str(acct.id)
+    if not account_id:
+        return {"edited": False, "reason": "Provide account_id (UUID) or code"}
+
+    update_fields = {k: v for k, v in params.items()
+                     if k not in ("account_id", "code") and v is not None}
+    data = AccountUpdate(**update_fields)
+    account = await CoaService.update_account(db, uuid.UUID(account_id), data)
     return account.model_dump()
+
+
+async def _coa_delete_account(db: AsyncSession, params: dict) -> Any:
+    """Soft-delete an account by code — only allowed for accounts with no transactions."""
+    from src.services.coa_service import CoaService
+    from src.models.account import Account
+    from src.models.transaction import Posting
+    from sqlalchemy import select, func
+
+    code = str(params["code"])
+    stmt = select(Account).where(Account.code == code)
+    result = await db.execute(stmt)
+    account = result.scalar_one_or_none()
+    if account is None:
+        return {"deleted": False, "reason": f"No account with code {code}"}
+
+    # Guard: refuse deletion if any postings reference this account
+    tx_count = await db.scalar(
+        select(func.count()).where(Posting.account_id == account.id)
+    )
+    if tx_count and tx_count > 0:
+        return {
+            "deleted": False,
+            "reason": (
+                f"Account {code} ({account.name}) has {tx_count} "
+                f"posting(s).  To preserve immutable provenance, this "
+                f"account cannot be deleted.  Use coa.edit_account to rename "
+                f"it or mark it inactive instead."
+            ),
+            "posting_count": tx_count,
+        }
+
+    deleted = await CoaService.soft_delete_account(db, account.id)
+    return {"deleted": True, "code": code, "name": deleted.name}
 
 
 async def _coa_load_template(db: AsyncSession, params: dict) -> Any:
@@ -284,16 +357,41 @@ async def _gl_journal_entry(db: AsyncSession, params: dict) -> Any:
     from src.validators.transaction import PostingCreate, TransactionCreate
 
     postings_data = params.get("postings", [])
-    postings = [
-        PostingCreate(
-            account_id=uuid.UUID(p["account_id"]),
-            debit_amount=int(p.get("debit_amount", 0) or p.get("amount", 0)),
-            credit_amount=int(p.get("credit_amount", 0) or 0),
+    postings = []
+    for p in postings_data:
+        # Resolve account — accept UUID or code
+        acct_id = p.get("account_id")
+        if acct_id and len(str(acct_id)) < 32:  # looks like a code, not UUID
+            from src.services.coa_service import CoaService
+            acct = await CoaService.get_account_by_code(db, str(acct_id))
+            if acct:
+                acct_id = str(acct.id)
+            else:
+                return {"success": False, "error": f"Account code {acct_id} not found"}
+
+        amount = int(p.get("amount", 0) or 0)
+        side = str(p.get("side", "")).lower()
+
+        if side == "credit":
+            debit_amt, credit_amt = 0, amount
+        elif side == "debit":
+            debit_amt, credit_amt = amount, 0
+        else:
+            # Explicit debit_amount / credit_amount (no side field)
+            debit_amt = int(p.get("debit_amount", 0) or 0)
+            credit_amt = int(p.get("credit_amount", 0) or 0)
+            # If only amount given without side, treat as debit
+            if not debit_amt and not credit_amt and amount:
+                debit_amt = amount
+
+        postings.append(PostingCreate(
+            account_id=uuid.UUID(acct_id),
+            debit_amount=debit_amt,
+            credit_amount=credit_amt,
             description=p.get("description", ""),
-        )
-        for p in postings_data
-    ]
+        ))
     tx_data = TransactionCreate(
+        idempotency_key=uuid.uuid4(),
         description=params.get("description", "Journal entry"),
         reference=params.get("reference"),
         effective_date=date.fromisoformat(params["date"]) if params.get("date") else date.today(),
@@ -336,10 +434,48 @@ async def _gl_list_transactions(db: AsyncSession, params: dict) -> Any:
 
 async def _gl_transaction_detail(db: AsyncSession, params: dict) -> Any:
     from src.services.transaction_service import TransactionService, TransactionNotFoundError
-    tx = await TransactionService.get_transaction(db, uuid.UUID(params["transaction_id"]))
+    from src.services.formatting import render_table, format_pence
+
+    tx_id = params.get("transaction_id") or params.get("ref")
+    tx = None
+    if tx_id:
+        # Try UUID first
+        try:
+            tx = await TransactionService.get_transaction(db, uuid.UUID(str(tx_id)))
+        except (ValueError, TypeError):
+            pass
+        # Fallback: look up by reference string
+        if tx is None:
+            from src.models.transaction import Transaction
+            from sqlalchemy import select
+            stmt = select(Transaction).where(Transaction.reference == str(tx_id))
+            result = await db.execute(stmt)
+            tx = result.scalar_one_or_none()
     if tx is None:
-        raise TransactionNotFoundError(uuid.UUID(params["transaction_id"]))
-    return TransactionService._transaction_to_response(tx).model_dump()
+        raise TransactionNotFoundError(str(tx_id))
+    d = TransactionService._transaction_to_response(tx).model_dump()
+    postings = d.get("postings", [])
+    if not postings:
+        return {"reference": d.get("reference"), "description": d.get("description"),
+                "postings": [], "message": "No postings found"}
+
+    rows = []
+    for p in postings:
+        pd = dict(p)
+        pd["debit_fmt"] = format_pence(pd.get("debit_amount", 0)) if pd.get("debit_amount") else ""
+        pd["credit_fmt"] = format_pence(pd.get("credit_amount", 0)) if pd.get("credit_amount") else ""
+        rows.append(pd)
+
+    return render_table(
+        rows,
+        columns=[
+            ("account_code", "Code"),
+            ("account_name", "Account"),
+            ("debit_fmt", "Debit (£)"),
+            ("credit_fmt", "Credit (£)"),
+            ("description", "Description"),
+        ],
+    )
 
 
 async def _gl_undo_transaction(db: AsyncSession, params: dict) -> Any:
@@ -519,19 +655,45 @@ async def _recon_report(db: AsyncSession, params: dict) -> Any:
 
 async def _invoice_create(db: AsyncSession, params: dict) -> Any:
     from src.services.invoice_service import InvoiceService
-    lines = params.get("lines", [])
-    invoice = await InvoiceService.create_invoice(
-        db, uuid.UUID(params["contact_id"]),
-        lines=[{
-            "description": l.get("description", ""),
-            "quantity": int(l.get("quantity", 1)),
-            "unit_price": int(l.get("unit_price", 0)),
-            "vat_rate": l.get("vat_rate", "20%"),
-        } for l in lines],
-        issue_date=date.fromisoformat(params["issue_date"]) if params.get("issue_date") else None,
-        due_date=date.fromisoformat(params["due_date"]) if params.get("due_date") else None,
+    from src.validators.invoice import InvoiceCreate, InvoiceLineCreate
+    from src.models.contact import Contact
+    from sqlalchemy import select
+    from datetime import date, timedelta
+
+    # Resolve contact by name or ID
+    contact_id = params.get("contact_id")
+    if not contact_id or len(str(contact_id)) < 32:
+        contact_name = params.get("contact_name", str(contact_id or ""))
+        stmt = select(Contact).where(Contact.name.ilike(f"%{contact_name}%"))
+        result = await db.execute(stmt)
+        contact = result.scalar_one_or_none()
+        if contact:
+            contact_id = str(contact.id)
+        else:
+            return {"success": False, "error": f"Contact '{contact_name}' not found"}
+
+    today = date.today()
+    lines_data = params.get("lines", [])
+    data = InvoiceCreate(
+        contact_id=uuid.UUID(str(contact_id)),
+        issue_date=date.fromisoformat(params["issue_date"]) if params.get("issue_date") else today,
+        due_date=date.fromisoformat(params["due_date"]) if params.get("due_date") else (today + timedelta(days=30)),
+        lines=[InvoiceLineCreate(
+            description=l.get("description", "Services"),
+            quantity=int(l.get("quantity", 1)),
+            unit_price=int(l.get("unit_price", 0)),
+            vat_rate=l.get("vat_rate", "20%"),
+        ) for l in lines_data] if lines_data else [
+            InvoiceLineCreate(
+                description="Services",
+                quantity=1,
+                unit_price=0,
+                vat_rate="20%",
+            )
+        ],
         notes=params.get("notes"),
     )
+    invoice = await InvoiceService.create_invoice(db, data)
     return invoice.model_dump()
 
 
@@ -890,6 +1052,7 @@ _HANDLERS: dict[str, Any] = {
     "coa.list": _coa_list,
     "coa.add_account": _coa_add_account,
     "coa.edit_account": _coa_edit_account,
+    "coa.delete_account": _coa_delete_account,
     "coa.load_template": _coa_load_template,
     "coa.detail": _coa_detail,
     "coa.set_vat_rate": _coa_set_vat_rate,

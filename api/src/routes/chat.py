@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 from typing import Any, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+import logging
+
+logger = logging.getLogger("accounting-api.chat")
 from pydantic import BaseModel
 
 from src.services.chat_service import ChatService
@@ -30,6 +35,9 @@ _registry = SkillRegistry()
 async def chat_websocket(websocket: WebSocket, session_id: str) -> None:
     """WebSocket endpoint for multi-turn LLM chat."""
     await websocket.accept()
+    PROCESSING_TIMEOUT = float(os.getenv("WS_PROCESSING_TIMEOUT", "120"))
+    _cancel_current = False  # flag for stop requests
+
     try:
         while True:
             raw = await websocket.receive_text()
@@ -47,6 +55,16 @@ async def chat_websocket(websocket: WebSocket, session_id: str) -> None:
             msg_type = data.get("type", "")
             content = data.get("content", "")
 
+            # ── Handle stop/cancel requests ──────────────────────────
+            if msg_type == "stop":
+                _cancel_current = True
+                logger.info("Stop requested for session %s", session_id)
+                await websocket.send_text(json.dumps({
+                    "type": "cancelled",
+                    "content": "Processing cancelled.",
+                }))
+                continue
+
             if not content or msg_type != "user_message":
                 err = ErrorMessage(
                     session_id=session_id,
@@ -56,8 +74,27 @@ async def chat_websocket(websocket: WebSocket, session_id: str) -> None:
                 await websocket.send_text(err.model_dump_json())
                 continue
 
-            # Process the message through the chat pipeline
-            result = await _chat_service.process_message(session_id, content)
+            # Process the message through the chat pipeline (with timeout)
+            _cancel_current = False
+            try:
+                result = await asyncio.wait_for(
+                    _chat_service.process_message(session_id, content),
+                    timeout=PROCESSING_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Processing timed out (session %s)", session_id)
+                await websocket.send_text(json.dumps({
+                    "type": "error",
+                    "content": "Request timed out — please try a shorter query.",
+                }))
+                continue
+            except Exception as exc:
+                logger.error("Chat processing failed (session %s): %s", session_id, exc)
+                await websocket.send_text(json.dumps({
+                    "type": "error",
+                    "content": f"LLM processing failed: {exc}",
+                }))
+                continue
 
             # Send response — may be a text reply or a tool call
             response_text = result.get("message", {}).get("text", "")
@@ -93,7 +130,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str) -> None:
                 }))
 
     except WebSocketDisconnect:
-        pass
+        logger.info("WebSocket client disconnected (session %s)", session_id)
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +180,7 @@ class ChatMessageRequest(BaseModel):
 class ChatMessageResponse(BaseModel):
     session_id: str
     message: dict[str, Any]
-    tool_call: dict[str, Any]
+    tool_call: Optional[dict[str, Any]] = None
 
 
 @router.post(
@@ -158,7 +195,12 @@ async def chat_message(body: ChatMessageRequest) -> ChatMessageResponse:
     bridging is unavailable.  It returns the full pipeline result including the
     formatted response and tool-call metadata.
     """
-    result = await _chat_service.process_message(body.session_id, body.message)
+    try:
+        result = await _chat_service.process_message(body.session_id, body.message)
+    except Exception as exc:
+        logger.error("Chat processing failed (session %s): %s", body.session_id, exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=502, detail=f"LLM processing failed: {exc}")
     return ChatMessageResponse(
         session_id=result["session_id"],
         message=result["message"],

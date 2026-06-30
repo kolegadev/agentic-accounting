@@ -13,11 +13,58 @@ import uuid
 from pathlib import Path
 
 import httpx
+import json as _json
+import logging
+import re
+from datetime import datetime, timezone
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 import uvicorn
 
+logger = logging.getLogger("chat-ui")
+
+
+def _instrument_log(module: str, function: str, event: str, **kwargs) -> None:
+    """Phase 2 structured logging for chat-ui bridge — mirrors
+    the API-side instrument.py contract-check format."""
+    entry = {
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+        "correlation_id": kwargs.pop("correlation_id", "no-correlation-id"),
+        "module": module,
+        "function": function,
+        "event": event,
+        "state_snapshot": kwargs,
+    }
+    logger.warning("INSTRUMENT %s", _json.dumps(entry, default=str))
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://accounting-api:8000")
+
+
+def _strip_html(text: str) -> str:
+    """Last-resort sanitizer: convert any HTML tags to plain-text equivalents
+    so the frontend's markdown renderer can process them cleanly."""
+    if not text or "<" not in text:
+        return text
+    text = re.sub(r"<(strong|b)[^>]*>(.*?)</\1>", r"**\2**", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<(em|i)[^>]*>(.*?)</\1>", r"*\2*", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</?p[^>]*>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<li[^>]*>(.*?)</li>", r"- \1\n", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"</?[ou]l[^>]*>", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    return text.strip()
+
+
+def _sanitize_msg(obj):
+    """Recursively sanitize every string in a JSON-serialisable object.
+    No HTML tag can survive this — every field of every message is cleaned."""
+    if isinstance(obj, str):
+        return _strip_html(obj)
+    if isinstance(obj, dict):
+        return {k: _sanitize_msg(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_msg(v) for v in obj]
+    return obj
 
 app = FastAPI(title="Agentic Accounting Chat UI", version="0.1.0")
 
@@ -102,126 +149,167 @@ async def websocket_chat(ws: WebSocket):
     try:
         import websockets as ws_client
 
-        async with ws_client.connect(backend_ws_url) as backend:
+        async def forward_to_backend(backend):
+            """Read browser messages, translate, and send to backend."""
+            try:
+                while True:
+                    data = await ws.receive_text()
+                    msg = json.loads(data)
+                    msg_type = msg.get("type", "message")
 
-            async def forward_to_backend():
-                """Read browser messages, translate, and send to backend."""
-                try:
-                    while True:
-                        data = await ws.receive_text()
-                        msg = json.loads(data)
-                        msg_type = msg.get("type", "message")
+                    if msg_type == "message":
+                        content = msg.get("content", "")
+                        persona = msg.get("persona", "professional")
+                        # ── I7: log every user message through bridge ────
+                        _instrument_log(
+                            "chat_ui_bridge", "forward_to_backend", "message_forward",
+                            correlation_id="via-websocket-bridge",
+                            direction="browser_to_backend",
+                            msg_type="message",
+                            content_chars=len(content),
+                            session_id=session_id,
+                        )
+                        await backend.send(json.dumps({
+                            "type": "user_message",
+                            "session_id": session_id,
+                            "content": content,
+                            "persona": persona,
+                        }))
+                    elif msg_type in ("confirm", "reject"):
+                        await backend.send(json.dumps({
+                            "type": "confirmation_response",
+                            "session_id": session_id,
+                            "confirmed": msg_type == "confirm",
+                        }))
+                    elif msg_type == "stop":
+                        # Forward stop to backend so it can cancel processing
+                        try:
+                            await backend.send(json.dumps({"type": "stop", "session_id": session_id}))
+                        except Exception:
+                            pass
+                        await ws.send_text(json.dumps({
+                            "type": "cancelled",
+                            "content": "Processing stopped.",
+                        }))
+                    elif msg_type == "ping":
+                        await ws.send_text(json.dumps({"type": "pong"}))
 
-                        if msg_type == "message":
-                            content = msg.get("content", "")
-                            persona = msg.get("persona", "professional")
-                            await backend.send(json.dumps({
-                                "type": "user_message",
-                                "session_id": session_id,
-                                "content": content,
-                                "persona": persona,
-                            }))
-                        elif msg_type in ("confirm", "reject"):
-                            # Map confirm/reject to confirmation_response
-                            await backend.send(json.dumps({
-                                "type": "confirmation_response",
-                                "session_id": session_id,
-                                "confirmed": msg_type == "confirm",
-                            }))
-                        elif msg_type == "stop":
-                            await ws.send_text(json.dumps({
-                                "type": "cancelled",
-                                "content": "Processing stopped.",
-                            }))
-                        elif msg_type == "ping":
-                            await ws.send_text(json.dumps({"type": "pong"}))
+            except WebSocketDisconnect:
+                pass
 
-                except WebSocketDisconnect:
-                    pass
+        async def forward_to_browser(backend):
+            """Read backend messages, translate, and send to browser."""
+            _send = lambda m: ws.send_text(json.dumps(_sanitize_msg(m)))
+            try:
+                async for raw in backend:
+                    msg = json.loads(raw)
+                    msg_type = msg.get("type", "")
 
-            async def forward_to_browser():
-                """Read backend messages, translate, and send to browser."""
-                try:
-                    async for raw in backend:
-                        msg = json.loads(raw)
-                        msg_type = msg.get("type", "")
+                    if msg_type == "error":
+                        await _send({
+                            "type": "error",
+                            "content": msg.get("message", msg.get("content", "Backend error")),
+                        })
 
-                        if msg_type == "error":
-                            await ws.send_text(json.dumps({
-                                "type": "error",
-                                "content": msg.get("message", msg.get("content", "Backend error")),
-                            }))
+                    elif msg_type == "tool_call":
+                        skill_id = msg.get("skill_id", "unknown")
+                        params = msg.get("params", {})
+                        await _send({
+                            "type": "tool_calls",
+                            "content": f"Invoking {skill_id}...",
+                            "tools": [{
+                                "id": msg.get("tool_call_id", ""),
+                                "name": skill_id,
+                                "args": params,
+                            }],
+                        })
+                        await _send({
+                            "type": "thinking",
+                            "content": f"Processing {skill_id}...",
+                        })
 
-                        elif msg_type == "tool_call":
-                            skill_id = msg.get("skill_id", "unknown")
-                            params = msg.get("params", {})
-                            await ws.send_text(json.dumps({
-                                "type": "tool_calls",
-                                "content": f"Invoking {skill_id}...",
-                                "tools": [{
-                                    "id": msg.get("tool_call_id", ""),
-                                    "name": skill_id,
-                                    "args": params,
-                                }],
-                            }))
-                            await ws.send_text(json.dumps({
-                                "type": "thinking",
-                                "content": f"Processing {skill_id}...",
-                            }))
+                    elif msg_type == "tool_result":
+                        result_data = msg.get("result", {})
+                        response = result_data.get("response", "")
+                        skill_name = result_data.get("skill", "unknown")
+                        persona = result_data.get("persona", "professional")
 
-                        elif msg_type == "tool_result":
-                            result_data = msg.get("result", {})
-                            response = result_data.get("response", "")
-                            skill_name = result_data.get("skill", "unknown")
-                            persona = result_data.get("persona", "professional")
+                        await _send({
+                            "type": "text",
+                            "content": response or f"Completed {skill_name}.",
+                            "persona": persona,
+                            "session_id": session_id,
+                        })
 
-                            await ws.send_text(json.dumps({
+                    elif msg_type == "confirmation_request":
+                        await _send({
+                            "type": "confirm_request",
+                            "content": msg.get("message", "Confirm this action?"),
+                            "tools": [msg.get("action", "unknown")],
+                        })
+
+                    elif msg_type == "stream_start":
+                        pass  # Skip — tokens follow
+
+                    elif msg_type in ("stream_token", "stream_end"):
+                        token = msg.get("token", msg.get("content", ""))
+                        if token:
+                            await _send({
                                 "type": "text",
-                                "content": response or f"Completed {skill_name}.",
-                                "persona": persona,
-                                "session_id": session_id,
-                            }))
+                                "content": token,
+                            })
 
-                        elif msg_type == "confirmation_request":
-                            await ws.send_text(json.dumps({
-                                "type": "confirm_request",
-                                "content": msg.get("message", "Confirm this action?"),
-                                "tools": [msg.get("action", "unknown")],
-                            }))
+                    else:
+                        content = msg.get("content", "")
+                        if content:
+                            await _send({
+                                "type": "text",
+                                "content": content,
+                            })
 
-                        elif msg_type == "stream_start":
-                            pass  # Skip — tokens follow
+            except Exception as exc:
+                logger.warning("forward_to_browser: backend connection error: %s", exc)
 
-                        elif msg_type in ("stream_token", "stream_end"):
-                            token = msg.get("token", msg.get("content", ""))
-                            if token:
-                                # Accumulated streaming handled by client
-                                await ws.send_text(json.dumps({
-                                    "type": "text",
-                                    "content": token,
-                                }))
+        # ── Reconnection loop with exponential backoff ────────────────────
+        retry_delay = 1
+        max_delay = 30
 
-                        else:
-                            # Unknown message type — pass through as text if content exists
-                            content = msg.get("content", "")
-                            if content:
-                                await ws.send_text(json.dumps({
-                                    "type": "text",
-                                    "content": str(content),
-                                }))
-
-                except Exception:
-                    pass
-
-            await asyncio.gather(
-                forward_to_backend(),
-                forward_to_browser(),
-            )
+        while True:
+            try:
+                async with ws_client.connect(
+                    backend_ws_url,
+                    ping_interval=20,
+                    ping_timeout=20,
+                    close_timeout=10,
+                ) as backend:
+                    retry_delay = 1  # reset on successful connect
+                    logger.info("Connected to accounting backend WebSocket (session %s)", session_id)
+                    await ws.send_text(json.dumps({
+                        "type": "backend_reconnected",
+                        "session_id": session_id,
+                    }))
+                    await asyncio.gather(
+                        forward_to_backend(backend),
+                        forward_to_browser(backend),
+                    )
+            except (WebSocketDisconnect, ws_client.exceptions.ConnectionClosedOK):
+                logger.info("Browser WebSocket closed cleanly (session %s)", session_id)
+                break
+            except ws_client.exceptions.ConnectionClosedError as e:
+                logger.warning("Backend WebSocket closed: %s — retrying in %ds", e, retry_delay)
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, max_delay)
+            except Exception as e:
+                logger.error("Bridge error (session %s): %s", session_id, e)
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, max_delay)
+        # ── End reconnection loop ─────────────────────────────────────────
 
     except ImportError:
         # websockets lib not available — fall back to HTTP REST bridge
         await _fallback_http_bridge(ws, session_id)
     except Exception as e:
+        logger.error("Fatal bridge error (session %s): %s", session_id, e)
         await ws.send_text(json.dumps({
             "type": "error",
             "content": f"Cannot connect to accounting backend: {e}",
@@ -974,17 +1062,20 @@ function debug(msg) {
 
   function renderMarkdown(text) {
     if (!text) return '';
-    return text
+    // Strip raw HTML tags the LLM might emit (it should use markdown, but
+    // sometimes it returns <br>, <strong>, <ul>, etc. — clean those up).
+    var cleaned = text.replace(/<[^>]*>/g, '');
+    return cleaned
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/```([\\s\\S]*?)```/g, '<pre>$1</pre>')
+      .replace(/```([^`]+)```/g, '<pre>$1</pre>')
       .replace(/^### (.+)/gm, '<strong>$1</strong>')
       .replace(/^## (.+)/gm, '<strong>$1</strong>')
       .replace(/^# (.+)/gm, '<strong>$1</strong>')
       .replace(/^- (.+)/gm, '\u2022 $1')
-      .replace(/\\n/g, '<br>');
+      .replace(/\n/g, '<br>');
   }
 
   function esc(s) {

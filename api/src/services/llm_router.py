@@ -16,6 +16,8 @@ from typing import Any
 import httpx
 
 from src.services.skill_registry import SkillRegistry
+from src.services.instrument import log_event, get_correlation_id
+from src.services.prompt_assembler import assemble_system_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -70,13 +72,33 @@ If the user is just chatting or asking a general question, respond with:
    Available templates: uk_sole_trader, uk_limited_company, uk_partnership,
    uk_micro_entity, uk_property_landlord.
 
+4.5 **When the user asks you to FIX, DELETE, REMOVE, or CORRECT accounts:**
+   CALL `coa.delete_account` with the account code to remove it.  Always
+   start with the FIRST wrong account mentioned.  DO NOT reply with text
+   claiming you deleted something unless you actually called the tool.
+   After each deletion, tell the user what you removed and confirm the next
+   step.  Once all wrong accounts are deleted, CALL `coa.add_account` to
+   create the replacement accounts.  NEVER use `coa.list` when the user is
+   asking you to DELETE — that's ignoring their request.
+
+4.6 **When creating an invoice for a customer, ALWAYS ensure the contact exists
+   first.**  If `contact.list` returns no results for the customer name, CALL
+   `contact.create` immediately — do NOT stop and tell the user the contact
+   wasn't found.  After creating the contact, proceed to `invoice.create`.
+   Creating invoices for new customers is a two-step workflow: create contact,
+   then create invoice.
+
 5. **Use `memory.search` for past ACTIVITY — use tools for current STATE.**
    When the user asks about progress or history, call `memory.search` FIRST.
    But when the user asks about current data (address, type, status, accounts),
    call the appropriate QUERY tool directly (`contact.detail`, `contact.list`,
    `coa.list`, etc.) — do NOT rely on memory for current state.
 
-6. **NEVER use bullet lists for accounts — ALWAYS use markdown tables.**
+6. **ALWAYS use markdown formatting — NEVER emit raw HTML tags.**
+   Bullet lists use `-`, bold uses `**`, line breaks are just newlines.
+   Do NOT use `<br>`, `<strong>`, `<ul>`, `<li>`, or any other HTML tags.
+
+7. **NEVER use bullet lists for accounts — ALWAYS use markdown tables.**
    Use this exact format for chart of accounts:
    ```
    | Code | Account Name | Category | Type |
@@ -89,6 +111,14 @@ If the user is just chatting or asking a general question, respond with:
 
 7. **Keep responses concise.**  The user doesn't need a wall of text —
    a short, helpful reply is better.  Let tool results speak for themselves.
+
+8. **YOU ARE IN A TOOL-CHAINING LOOP.**  After you call a tool, the
+   system will ask you to continue.  Only return a `{"response": "text"}`
+   when the user's ENTIRE request is fulfilled.  If the task is incomplete
+   — for example, you just listed contacts but haven't created the invoice,
+   or you deleted one account but haven't deleted the other — you MUST
+   call the next tool.  Showing data is NOT the final response if the
+   user asked you to take action.
 
 ## Available Tools
 
@@ -142,9 +172,29 @@ class LLMRouter:
           {"response": "text"}                       — chat reply
           {"setup_required": true, "step": "welcome"} — start setup wizard
         """
-        # 1) Build prompt with tools + context (inject setup context if fresh)
+        # 1) Build prompt using the assembler (replaces thin _build_system_prompt)
         tools = self._registry.list_skills()
-        prompt = self._build_system_prompt(tools, history, context, account_count)
+        prompt = assemble_system_prompt(tools, history, account_count, mode="routing")
+
+        # ── I1: contract check — does prompt now include docs? ─────────
+        doc_sections_present = []
+        for doc_name in ["MCP_DOCUMENTATION", "SKILL", "FORMANCE", "KATRA",
+                          "episodic", "semantic", "knowledge graph",
+                          "double-entry", "Formance Ledger"]:
+            if doc_name.lower() in prompt.lower():
+                doc_sections_present.append(doc_name)
+        log_event(
+            module="llm_router", function="route", event="contract_check",
+            state_snapshot={
+                "prompt_chars": len(prompt),
+                "sections": ["identity", "architecture", "katra", "formance",
+                             "tools", "context", "rules"],
+                "docs_loaded": doc_sections_present,
+                "tool_count": len(tools),
+            },
+            contract="System prompt must include MCP docs, Formance docs, Katra docs, full SKILL.md",
+            contract_held=len(doc_sections_present) >= 5,
+        )
 
         # 3) Call LLM
         raw = await self._call_llm(prompt, user_message)
@@ -198,6 +248,27 @@ class LLMRouter:
         result = SYSTEM_PROMPT.replace("{today}", today).replace("{tools_json}", tools_json).replace("{context}", ctx_str)
         if setup_extra:
             result += "\n" + setup_extra
+
+        # ── I1: contract check — what did the LLM actually receive? ─────
+        sections = ["rules", "tools_snippets", "context"]
+        if setup_extra:
+            sections.append("setup_extra")
+        # Check what documentation sections are present (none — no loader exists)
+        doc_sections_present = []
+        for doc_name in ["MCP_DOCUMENTATION", "SKILL_MD", "FORMANCE_API", "KATRA_API"]:
+            if doc_name.lower() in result.lower():
+                doc_sections_present.append(doc_name)
+        log_event(
+            module="llm_router", function="_build_system_prompt", event="contract_check",
+            state_snapshot={
+                "prompt_chars": len(result),
+                "sections": sections,
+                "docs_loaded": doc_sections_present,
+                "tool_count": len(tool_snippets),
+            },
+            contract="System prompt must include MCP docs, Formance docs, Katra docs, full SKILL.md",
+            contract_held=len(doc_sections_present) >= 3,
+        )
         return result
 
     async def _call_llm(self, system_prompt: str, user_message: str) -> str:
@@ -215,6 +286,19 @@ class LLMRouter:
                 {"role": "user", "content": user_message},
             ],
         }
+
+        # ── I2: log what the LLM API receives ──────────────────────────
+        log_event(
+            module="llm_router", function="_call_llm", event="entry",
+            state_snapshot={
+                "system_prompt_chars": len(system_prompt),
+                "user_message_chars": len(user_message),
+                "total_payload_chars": len(system_prompt) + len(user_message),
+                "model": LLM_MODEL,
+                "temperature": LLM_TEMPERATURE,
+                "max_tokens": LLM_MAX_TOKENS,
+            },
+        )
 
         try:
             async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:

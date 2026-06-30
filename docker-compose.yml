@@ -90,22 +90,18 @@ services:
       retries: 5
 
   formance-ledger:
-    image: ghcr.io/formancehq/ledger:v2
+    image: ghcr.io/formancehq/ledger:latest
     container_name: accounting-formance
     restart: unless-stopped
     environment:
-      STORAGE_DRIVER: postgres
-      STORAGE_POSTGRES_CONN_STRING: >
-        postgresql://${DB_USER:-accounting}:${DB_PASSWORD:-accounting}
-        @formance-postgres:5432/formance?sslmode=disable
+      POSTGRES_URI: postgresql://${DB_USER:-accounting}:${DB_PASSWORD:-accounting}@formance-postgres:5432/formance?sslmode=disable
     depends_on:
       formance-postgres:
         condition: service_healthy
     networks:
       - accounting-net
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider",
-             "http://localhost:3068/_info"]
+      test: ["CMD", "curl", "-sf", "http://localhost:3068/_info"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -127,10 +123,11 @@ services:
       FORNANCE_LEDGER_URL: http://formance-ledger:3068
       KATRA_MCP_URL: http://accounting-katra-server:3113/mcp
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      LLM_API_URL: ${LLM_API_URL:-http://localhost:11434/v1/chat/completions}
+      LLM_API_URL: ${LLM_API_URL:-https://api.deepseek.com/v1/chat/completions}
       LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_MODEL: ${LLM_MODEL:-deepseek-v4-flash}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-v4-pro}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-60}
     volumes:
       - ./api:/app
       - ./coa_templates:/app/coa_templates
@@ -254,7 +251,7 @@ services:
     container_name: accounting-chat-ui
     restart: unless-stopped
     ports:
-      - "${UI_PORT:-3001}:3000"
+      - "${UI_PORT:-3002}:3000"
     environment:
       API_BASE_URL: http://accounting-api:8000
       WS_URL: ws://accounting-api:8000/ws

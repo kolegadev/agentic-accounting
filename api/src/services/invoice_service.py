@@ -219,6 +219,55 @@ class InvoiceService:
 
         return _invoice_to_response(invoice)
 
+    @staticmethod
+    async def _post_invoice_to_gl(
+        db: AsyncSession,
+        invoice: Invoice,
+    ) -> None:
+        """Create the double-entry journal entries for a sent invoice.
+
+        Debits Accounts Receivable (1100) for the gross amount, credits
+        Sales (4000) for the net subtotal, and credits VAT Control (2100)
+        for the VAT portion.  All amounts are in pence.
+        """
+        from src.validators.transaction import PostingCreate, TransactionCreate
+        from src.services.transaction_service import TransactionService
+        from src.services.coa_service import CoaService
+
+        gross = invoice.subtotal + invoice.vat_total
+
+        ar_acct = await CoaService.get_account_by_code(db, "1100")
+        sales_acct = await CoaService.get_account_by_code(db, "4000")
+        vat_acct = await CoaService.get_account_by_code(db, "2100")
+
+        ref = invoice.reference or "INV"
+        postings = [
+            PostingCreate(
+                account_id=ar_acct.id, debit_amount=gross, credit_amount=0,
+                description=f"{ref} — Accounts Receivable",
+            ),
+            PostingCreate(
+                account_id=sales_acct.id, debit_amount=0,
+                credit_amount=invoice.subtotal,
+                description=f"{ref} — Revenue",
+            ),
+        ]
+        if invoice.vat_total > 0:
+            postings.append(PostingCreate(
+                account_id=vat_acct.id, debit_amount=0,
+                credit_amount=invoice.vat_total,
+                description=f"{ref} — VAT",
+            ))
+
+        tx = TransactionCreate(
+            idempotency_key=uuid.uuid4(),
+            description=f"Invoice {ref}",
+            effective_date=invoice.issue_date,
+            postings=postings,
+        )
+        created = await TransactionService.create_transaction(db, tx)
+        await TransactionService.post_transaction(db, created.id)
+
     # ------------------------------------------------------------------
     # Send invoice (Draft → Sent)
     # ------------------------------------------------------------------
@@ -258,6 +307,9 @@ class InvoiceService:
 
         await db.commit()
         await db.refresh(invoice)
+
+        # ── Post journal entries to the General Ledger ──────────────
+        await InvoiceService._post_invoice_to_gl(db, invoice)
 
         return _invoice_to_response(invoice)
 

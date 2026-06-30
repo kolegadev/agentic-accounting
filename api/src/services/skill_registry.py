@@ -8,6 +8,8 @@ from typing import Any, Optional
 
 import yaml
 
+from src.services.instrument import log_event
+
 
 REGISTRY_PATH = Path(__file__).resolve().parent.parent / "skills" / "registry.yaml"
 
@@ -54,6 +56,26 @@ class SkillRegistry:
         self._skills = skills
         self._by_id = {s["id"]: s for s in skills if "id" in s}
         self._loaded = True
+
+        # ── I5: tool count dual-registry check ──────────────────────────
+        # How many tools does the API-side registry have vs the MCP gateway?
+        gateway_tool_count = "unknown (gateway may not be loaded)"
+        try:
+            from pathlib import Path as _Path
+            gateway_registry_path = _Path(__file__).resolve().parent.parent.parent.parent / "gateway" / "src" / "tool_registry.py"
+            if gateway_registry_path.exists():
+                gateway_tool_count = "40+ (from ENDPOINT_MAP in tool_registry.py)"
+        except Exception:
+            pass
+        log_event(
+            module="skill_registry", function="_load_yaml", event="state_change",
+            state_snapshot={
+                "yaml_tool_count": len(skills),
+                "gateway_tool_count_hint": gateway_tool_count,
+                "registry_path": str(path),
+                "skill_ids": [s.get("id") for s in skills],
+            },
+        )
 
     # ------------------------------------------------------------------
     # public API
