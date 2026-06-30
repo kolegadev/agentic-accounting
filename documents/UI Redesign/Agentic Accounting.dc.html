@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:#070708;font-family:'Geist',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:#5eead4;color:#06201c}
+  .sb::-webkit-scrollbar{width:9px;height:9px}
+  .sb::-webkit-scrollbar-thumb{background:#2c2e33;border-radius:8px}
+  .sb::-webkit-scrollbar-thumb:hover{background:#3a3d44}
+  .sb::-webkit-scrollbar-track{background:transparent}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+
+<div style="height:100vh;display:flex;flex-direction:column;background:radial-gradient(1200px 600px at 80% -10%, #0d1614 0%, #070708 55%);color:#ececed;overflow:hidden">
+
+  <!-- topbar -->
+  <div data-screen-label="Topbar" style="height:62px;flex:none;border-bottom:1px solid #1d1f23;display:flex;align-items:center;gap:18px;padding:0 22px;background:#0a0b0c">
+    <div style="display:flex;align-items:baseline;gap:8px">
+      <span style="font-size:17px;font-weight:700;letter-spacing:-.02em;color:#f4f4f5">ledger<span style="color:#5eead4">.chat</span></span>
+      <span style="font-size:12px;color:#6b6f76">AI bookkeeper</span>
+    </div>
+
+    <div style="position:relative">
+      <button onClick="{{ toggleMenuA }}" style="display:flex;align-items:center;gap:10px;background:#14161a;border:1px solid #2a2d33;border-radius:10px;padding:8px 12px;cursor:pointer;color:#ececed;font-family:inherit">
+        <span style="width:24px;height:24px;border-radius:7px;background:{{ c.swatch }};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#06120f">{{ c.initials }}</span>
+        <span style="display:flex;flex-direction:column;align-items:flex-start;line-height:1.15">
+          <span style="font-size:13.5px;font-weight:600;white-space:nowrap">{{ c.name }}</span>
+          <span style="font-size:10.5px;color:#7e828a;white-space:nowrap">{{ c.type }} · {{ c.region }}</span>
+        </span>
+        <span style="color:#7e828a;font-size:11px;margin-left:4px">▾</span>
+      </button>
+      <sc-if value="{{ menuA }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:52px;left:0;width:288px;background:#101216;border:1px solid #2a2d33;border-radius:13px;padding:7px;z-index:40;box-shadow:0 24px 50px -16px rgba(0,0,0,.85)">
+          <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:#6b6f76;padding:7px 9px 5px">Switch company</div>
+          <sc-for list="{{ companies }}" as="co" hint-placeholder-count="3">
+            <button onClick="{{ co.pick }}" style="width:100%;display:flex;align-items:center;gap:11px;background:{{ co.rowBg }};border:none;border-radius:9px;padding:9px;cursor:pointer;color:#ececed;font-family:inherit;text-align:left">
+              <span style="width:28px;height:28px;flex:none;border-radius:8px;background:{{ co.swatch }};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#06120f">{{ co.initials }}</span>
+              <span style="flex:1;display:flex;flex-direction:column;line-height:1.2">
+                <span style="font-size:13px;font-weight:600">{{ co.name }}</span>
+                <span style="font-size:10.5px;color:#7e828a">{{ co.type }} · {{ co.vat }}</span>
+              </span>
+              <span style="color:#5eead4;font-size:13px">{{ co.tick }}</span>
+            </button>
+          </sc-for>
+          <div style="border-top:1px solid #23262b;margin:6px 4px 0;padding-top:6px">
+            <button style="width:100%;display:flex;align-items:center;gap:9px;background:none;border:none;padding:9px;cursor:pointer;color:#9aa0a8;font-family:inherit;font-size:12.5px;border-radius:9px">＋ Add a company</button>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <div style="flex:1"></div>
+
+    <div style="display:flex;align-items:center;gap:9px">
+      <span style="display:flex;align-items:center;gap:7px;font-size:12px;color:#a7abb2;background:#14161a;border:1px solid #25282e;border-radius:9px;padding:7px 11px;font-family:'Geist Mono',monospace;white-space:nowrap">{{ c.period }}</span>
+      <span style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:500;color:{{ c.balColor }};background:{{ c.balBg }};border:1px solid {{ c.balBorder }};border-radius:9px;padding:7px 11px;white-space:nowrap">{{ c.balDot }} {{ c.balText }}</span>
+      <button onClick="{{ openAdmin }}" style="display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;color:#dfe1e4;background:#14161a;border:1px solid #2a2d33;border-radius:9px;padding:7px 12px;cursor:pointer;font-family:inherit;white-space:nowrap">⚙ Company details</button>
+    </div>
+  </div>
+
+  <!-- body -->
+  <div style="flex:1;display:flex;min-height:0">
+
+    <!-- LEFT : dashboard -->
+    <div class="sb" data-screen-label="Dashboard" style="width:53%;min-width:0;overflow-y:auto;border-right:1px solid #1d1f23;padding:22px 26px 30px;display:flex;flex-direction:column;gap:22px">
+
+      <!-- state panel -->
+      <div style="border:1px solid #1c3a35;border-radius:15px;background:linear-gradient(180deg,#0e1b18,#0b1311);padding:18px 19px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:13px">
+          <span style="width:7px;height:7px;border-radius:50%;background:#5eead4;animation:blink 2.4s infinite"></span>
+          <span style="font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:#5eead4;font-weight:600">What's happening now</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 20px">
+          <div><div style="font-size:11px;color:#7e828a;margin-bottom:3px">Company</div><div style="font-size:14.5px;font-weight:600">{{ c.name }}</div></div>
+          <div><div style="font-size:11px;color:#7e828a;margin-bottom:3px">Open period</div><div style="font-size:14.5px;font-weight:600">{{ c.period }}</div></div>
+          <div><div style="font-size:11px;color:#7e828a;margin-bottom:3px">Ledger status</div><div style="font-size:14.5px;font-weight:600;color:{{ c.balColor }}">{{ c.balText }}</div></div>
+          <div><div style="font-size:11px;color:#7e828a;margin-bottom:3px">Last activity</div><div style="font-size:14.5px;font-weight:600">{{ c.lastAct }}</div></div>
+        </div>
+      </div>
+
+      <!-- reports -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px">
+          <span style="font-size:13px;font-weight:600;color:#cfd2d6">Instant reports</span>
+          <span style="font-size:11px;color:#6b6f76">one tap · live data</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+          <sc-for list="{{ reports }}" as="r" hint-placeholder-count="6">
+            <button onClick="{{ r.open }}" style="display:flex;flex-direction:column;gap:9px;align-items:flex-start;background:#101215;border:1px solid #25282e;border-radius:12px;padding:13px 13px;cursor:pointer;color:#ececed;font-family:inherit;text-align:left" style-hover="background:#15181c;border-color:#34a795">
+              <span style="font-size:18px">{{ r.icon }}</span>
+              <span style="font-size:12.5px;font-weight:600;line-height:1.25">{{ r.label }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- ledger cards -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px">
+          <span style="font-size:13px;font-weight:600;color:#cfd2d6">Your books, in plain English</span>
+          <span style="font-size:11px;color:#6b6f76">DR = debit · CR = credit</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <sc-for list="{{ cards }}" as="k" hint-placeholder-count="6">
+            <div style="border:1px solid #25282e;border-radius:13px;background:#0f1114;overflow:hidden">
+              <div style="padding:13px 14px 12px;border-bottom:1px solid #1d2024">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+                  <span style="font-size:13px;font-weight:600">{{ k.title }}</span>
+                  <span style="font-size:9.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:{{ k.accent }};background:{{ k.tint }};border:1px solid {{ k.border }};padding:2px 7px;border-radius:6px">{{ k.type }}</span>
+                </div>
+                <div style="font-family:'Geist Mono',monospace;font-size:23px;font-weight:600;letter-spacing:-.01em">{{ k.balanceStr }}</div>
+                <div style="font-size:11px;color:#7e828a;margin-top:3px">{{ k.sub }}</div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr">
+                <div style="padding:10px 12px;border-right:1px solid #1d2024">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-family:'Geist Mono',monospace;font-size:10px;font-weight:600;color:#7fb4ff;background:#11203a;border-radius:5px;padding:1px 5px">DR</span><span style="font-size:11.5px;font-weight:600;color:#dfe1e4">{{ k.drLabel }}</span></div>
+                  <div style="font-size:10.5px;color:#80858d;line-height:1.4">{{ k.drDesc }}</div>
+                </div>
+                <div style="padding:10px 12px">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-family:'Geist Mono',monospace;font-size:10px;font-weight:600;color:#f0b86e;background:#33240f;border-radius:5px;padding:1px 5px">CR</span><span style="font-size:11.5px;font-weight:600;color:#dfe1e4">{{ k.crLabel }}</span></div>
+                  <div style="font-size:10.5px;color:#80858d;line-height:1.4">{{ k.crDesc }}</div>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT : chat / mentor -->
+    <div data-screen-label="Mentor chat" style="width:47%;min-width:0;display:flex;flex-direction:column;background:#0a0b0c">
+      <div style="flex:none;padding:15px 20px;border-bottom:1px solid #1d1f23;display:flex;align-items:center;gap:11px">
+        <span style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#5eead4,#2dd4bf);display:flex;align-items:center;justify-content:center;font-size:15px">🎓</span>
+        <div style="line-height:1.2"><div style="font-size:13.5px;font-weight:600">Your bookkeeping mentor</div><div style="font-size:11px;color:#7e828a">Explains every step as you go</div></div>
+      </div>
+
+      <div class="sb" style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:15px">
+
+        <!-- state recap -->
+        <div style="max-width:90%;background:#101216;border:1px solid #23262b;border-radius:4px 14px 14px 14px;padding:13px 15px">
+          <div style="font-size:13.5px;line-height:1.55;color:#d7d9dd">You're in <b style="color:#fff">{{ c.name }}</b> for <b style="color:#fff">{{ c.period }}</b>. Your books are <b style="color:{{ c.balColor }}">{{ c.balText }}</b> — every debit has a matching credit. Ask me anything, or record a transaction below.</div>
+        </div>
+
+        <!-- user msg -->
+        <div style="align-self:flex-end;max-width:82%;background:#5eead4;color:#06231e;border-radius:14px 14px 4px 14px;padding:11px 14px;font-size:13.5px;font-weight:500;line-height:1.45">Record £500 for office supplies, paid from the bank account</div>
+
+        <!-- ai entry -->
+        <div style="max-width:94%;background:#101216;border:1px solid #23262b;border-radius:4px 14px 14px 14px;padding:14px 15px;display:flex;flex-direction:column;gap:12px">
+          <div style="font-size:13.5px;line-height:1.5;color:#d7d9dd">Done — I posted journal <span style="font-family:'Geist Mono',monospace;color:#7fb4ff">JE-2026-0042</span>. Here's exactly what moved:</div>
+
+          <sc-if value="{{ doubleEntry }}" hint-placeholder-val="{{ true }}">
+            <div style="border:1px solid #23262b;border-radius:11px;overflow:hidden;background:#0b0c0e">
+              <div style="display:grid;grid-template-columns:1fr 1fr;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#7e828a;font-weight:600;border-bottom:1px solid #1d2024"><div style="padding:7px 13px;border-right:1px solid #1d2024;color:#7fb4ff">Debit (DR)</div><div style="padding:7px 13px;color:#f0b86e">Credit (CR)</div></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr">
+                <div style="padding:11px 13px;border-right:1px solid #1d2024">
+                  <div style="font-size:12.5px;font-weight:600">Office Supplies</div>
+                  <div style="font-size:10.5px;color:#7e828a;margin-bottom:6px">Expense · 6201</div>
+                  <div style="font-family:'Geist Mono',monospace;font-size:15px;font-weight:600;color:#7fb4ff">£500.00</div>
+                </div>
+                <div style="padding:11px 13px">
+                  <div style="font-size:12.5px;font-weight:600">Bank Account</div>
+                  <div style="font-size:10.5px;color:#7e828a;margin-bottom:6px">Asset · 1200</div>
+                  <div style="font-family:'Geist Mono',monospace;font-size:15px;font-weight:600;color:#f0b86e">£500.00</div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="font-size:12.5px;line-height:1.55;color:#9ea3aa;background:#0d1614;border:1px solid #15302b;border-radius:9px;padding:10px 12px">
+            <b style="color:#5eead4">In plain English:</b> your <b style="color:#cfd2d6">expenses went up £500</b> (a debit raises an expense) and your <b style="color:#cfd2d6">bank balance went down £500</b> (a credit lowers an asset). The two sides are equal — that's double-entry, and it's why your books always balance.
+          </div>
+        </div>
+
+        <!-- next steps -->
+        <sc-if value="{{ guided }}" hint-placeholder-val="{{ true }}">
+          <div style="max-width:94%;background:linear-gradient(180deg,#0e1b18,#0b1311);border:1px solid #1c3a35;border-radius:4px 14px 14px 14px;padding:14px 15px">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px"><span style="font-size:13px">🧭</span><span style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#5eead4;font-weight:600">What to do next</span></div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ nextSteps }}" as="s" hint-placeholder-count="3">
+                <button onClick="{{ s.go }}" style="display:flex;align-items:center;gap:11px;background:#0e100f;border:1px solid #214039;border-radius:10px;padding:10px 12px;cursor:pointer;color:#ececed;font-family:inherit;text-align:left" style-hover="border-color:#5eead4">
+                  <span style="width:26px;height:26px;flex:none;border-radius:8px;background:#11211d;display:flex;align-items:center;justify-content:center;font-size:13px">{{ s.icon }}</span>
+                  <span style="flex:1"><span style="display:block;font-size:12.5px;font-weight:600">{{ s.title }}</span><span style="display:block;font-size:11px;color:#80858d">{{ s.desc }}</span></span>
+                  <span style="color:#5eead4;font-size:14px">→</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-for list="{{ appendedA }}" as="m" hint-placeholder-count="0">
+          <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ false }}">
+            <div style="align-self:flex-end;max-width:82%;background:#5eead4;color:#06231e;border-radius:14px 14px 4px 14px;padding:11px 14px;font-size:13.5px;font-weight:500;line-height:1.45;animation:rise .25s ease">{{ m.text }}</div>
+          </sc-if>
+          <sc-if value="{{ m.isAi }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:90%;background:#101216;border:1px solid #23262b;border-radius:4px 14px 14px 14px;padding:13px 15px;font-size:13.5px;line-height:1.55;color:#d7d9dd;animation:rise .25s ease">{{ m.text }}</div>
+          </sc-if>
+        </sc-for>
+      </div>
+
+      <!-- input -->
+      <div style="flex:none;padding:14px 18px 18px;border-top:1px solid #1d1f23">
+        <div style="display:flex;gap:10px;align-items:flex-end">
+          <input value="{{ inA }}" onInput="{{ typeA }}" onKeyDown="{{ keyA }}" placeholder="Record a transaction, create an invoice, check your VAT…" style="flex:1;background:#101216;border:1px solid #2a2d33;border-radius:11px;padding:12px 14px;color:#ececed;font-family:inherit;font-size:13.5px;outline:none" />
+          <button onClick="{{ sendA }}" style="background:#5eead4;color:#06231e;border:none;border-radius:11px;padding:12px 18px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ REPORT MODAL ============ -->
+  <sc-if value="{{ reportOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;background:rgba(4,5,6,.72);backdrop-filter:blur(4px);z-index:60;display:flex;align-items:center;justify-content:center;padding:40px">
+      <div onClick="{{ stop }}" class="sb" style="width:540px;max-width:100%;max-height:88vh;overflow-y:auto;background:#0e0f12;border:1px solid #2a2d33;border-radius:16px;box-shadow:0 40px 90px -30px rgba(0,0,0,.9)">
+        <div style="position:sticky;top:0;background:#0e0f12;border-bottom:1px solid #1f2227;padding:18px 22px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+          <div>
+            <div style="display:flex;align-items:center;gap:9px"><span style="font-size:18px">{{ rpt.icon }}</span><h3 style="margin:0;font-size:17px;font-weight:600">{{ rpt.title }}</h3></div>
+            <div style="font-size:12px;color:#7e828a;margin-top:4px">{{ rpt.sub }}</div>
+          </div>
+          <button onClick="{{ closeModal }}" style="background:#16181c;border:1px solid #2a2d33;color:#cfd2d6;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:15px;flex:none">✕</button>
+        </div>
+        <div style="padding:8px 22px 14px">
+          <div style="display:grid;grid-template-columns:1fr auto auto;gap:0;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6b6f76;font-weight:600;padding:8px 0;border-bottom:1px solid #1f2227">
+            <div>{{ rpt.colA }}</div><div style="text-align:right;min-width:96px">{{ rpt.colB }}</div><div style="text-align:right;min-width:96px">{{ rpt.colC }}</div>
+          </div>
+          <sc-for list="{{ rpt.rows }}" as="row" hint-placeholder-count="8">
+            <sc-if value="{{ row.isHead }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#5eead4;font-weight:600;padding:14px 0 5px">{{ row.label }}</div>
+            </sc-if>
+            <sc-if value="{{ row.isLine }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:1fr auto auto;padding:7px 0;border-bottom:1px solid #16181b">
+                <div style="font-size:13px;color:#cfd2d6;padding-left:{{ row.indent }}">{{ row.label }}</div>
+                <div style="text-align:right;min-width:96px;font-family:'Geist Mono',monospace;font-size:13px;color:#7fb4ff">{{ row.val }}</div>
+                <div style="text-align:right;min-width:96px;font-family:'Geist Mono',monospace;font-size:13px;color:#f0b86e">{{ row.val2 }}</div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ row.isTotal }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:1fr auto auto;padding:10px 0;border-top:1px solid #2a2d33;margin-top:3px">
+                <div style="font-size:13.5px;font-weight:600;color:#fff">{{ row.label }}</div>
+                <div style="text-align:right;min-width:96px;font-family:'Geist Mono',monospace;font-size:13.5px;font-weight:600;color:#fff">{{ row.val }}</div>
+                <div style="text-align:right;min-width:96px;font-family:'Geist Mono',monospace;font-size:13.5px;font-weight:600;color:#fff">{{ row.val2 }}</div>
+              </div>
+            </sc-if>
+          </sc-for>
+          <div style="margin-top:14px;background:#0d1614;border:1px solid #15302b;border-radius:10px;padding:11px 13px;font-size:12px;line-height:1.55;color:#9ea3aa"><b style="color:#5eead4">Note · </b>{{ rpt.note }}</div>
+          <div style="display:flex;gap:9px;margin-top:14px">
+            <button style="flex:1;background:#5eead4;color:#06231e;border:none;border-radius:9px;padding:10px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">Export PDF</button>
+            <button style="flex:1;background:#16181c;color:#dfe1e4;border:1px solid #2a2d33;border-radius:9px;padding:10px;font-size:12.5px;font-weight:500;cursor:pointer;font-family:inherit">Ask mentor to explain</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ ADMIN MODAL ============ -->
+  <sc-if value="{{ adminOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;background:rgba(4,5,6,.72);backdrop-filter:blur(4px);z-index:60;display:flex;align-items:center;justify-content:center;padding:40px">
+      <div onClick="{{ stop }}" class="sb" style="width:560px;max-width:100%;max-height:88vh;overflow-y:auto;background:#0e0f12;border:1px solid #2a2d33;border-radius:16px;box-shadow:0 40px 90px -30px rgba(0,0,0,.9)">
+        <div style="border-bottom:1px solid #1f2227;padding:18px 22px;display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:11px">
+            <span style="width:34px;height:34px;border-radius:9px;background:{{ c.swatch }};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#06120f">{{ c.initials }}</span>
+            <div><h3 style="margin:0;font-size:17px;font-weight:600">Company details</h3><div style="font-size:12px;color:#7e828a;margin-top:2px">{{ c.name }}</div></div>
+          </div>
+          <button onClick="{{ closeModal }}" style="background:#16181c;border:1px solid #2a2d33;color:#cfd2d6;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:15px">✕</button>
+        </div>
+        <div style="padding:20px 22px;display:grid;grid-template-columns:1fr 1fr;gap:16px 18px">
+          <sc-for list="{{ adminFields }}" as="f" hint-placeholder-count="8">
+            <div style="grid-column:{{ f.span }}">
+              <div style="font-size:11px;color:#7e828a;margin-bottom:6px">{{ f.label }}</div>
+              <div style="background:#101216;border:1px solid #25282e;border-radius:9px;padding:10px 12px;font-size:13px;color:#dfe1e4;font-family:{{ f.font }}">{{ f.value }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="padding:0 22px 20px;display:flex;gap:9px">
+          <button style="flex:1;background:#5eead4;color:#06231e;border:none;border-radius:9px;padding:11px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">Edit details</button>
+          <button style="background:#16181c;color:#dfe1e4;border:1px solid #2a2d33;border-radius:9px;padding:11px 16px;font-size:12.5px;font-weight:500;cursor:pointer;font-family:inherit">Manage users & roles</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;guidedMode&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Mentoring&quot;,&quot;label&quot;:&quot;Guided mode (next-step cards)&quot;},&quot;doubleEntry&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Mentoring&quot;,&quot;label&quot;:&quot;Show double-entry teaching panels&quot;}}">
+class Component extends DCLogic {
+  state = {
+    companyId: 'brightwork',
+    menuA: false,
+    reportKey: null, adminOpen: false,
+    appendedA: [],
+    inA: ''
+  };
+
+  companyData() {
+    return [
+      { id:'brightwork', name:'Brightwork Studio Ltd', initials:'BS', swatch:'#5eead4', type:'Ltd Company', region:'UK', cur:'£', standard:'FRS 105', vat:'VAT registered', vatNo:'GB 412 7785 09', period:'VAT Q1 · Apr–Jun 2026', balanced:true, lastAct:'£500 office supplies', addr:'Unit 4, Gasworks, Bristol BS1 6XN', yearEnd:'31 March', coa:'UK Limited Company', bank:24580.42, income:42300.00, expenses:8210.00, creditCard:1940.55, ar:6750.00, arCount:3, ap:2310.00, apCount:2 },
+      { id:'marcus', name:'Marcus Reed', initials:'MR', swatch:'#7fb4ff', type:'Sole Trader', region:'UK', cur:'£', standard:'Cash basis', vat:'Not VAT registered', vatNo:'—', period:'Tax year 2025/26', balanced:true, lastAct:'£90 fuel', addr:'12 Elm Row, Leeds LS6 2TX', yearEnd:'5 April', coa:'UK Sole Trader', bank:8120.10, income:15400.00, expenses:3450.00, creditCard:620.00, ar:1200.00, arCount:1, ap:430.00, apCount:1 },
+      { id:'northgate', name:'Northgate Properties', initials:'NP', swatch:'#f0b86e', type:'LLC', region:'US', cur:'$', standard:'US GAAP', vat:'Sales tax', vatNo:'EIN 84-3920117', period:'FY2026 · Q2', balanced:false, lastAct:'$2,400 repairs', addr:'88 Harbor Dr, Austin TX 78701', yearEnd:'31 December', coa:'US Real Estate', bank:96420.00, income:128900.00, expenses:31200.00, creditCard:5400.00, ar:18300.00, arCount:5, ap:9120.00, apCount:4 }
+    ];
+  }
+
+  active() { return this.companyData().find(c => c.id === this.state.companyId); }
+
+  fmt(n, cur) {
+    return cur + Number(n).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  buildCards(c) {
+    const f = (n) => this.fmt(n, c.cur);
+    const defs = [
+      { title:'Bank Account', type:'Asset', balance:c.bank, sub:'Current account', tone:'asset',
+        drLabel:'Money in', drDesc:'Deposits & receipts raise your cash', crLabel:'Money out', crDesc:'Payments & withdrawals reduce it' },
+      { title:'Sales / Income', type:'Income', balance:c.income, sub:'Revenue earned this period', tone:'income',
+        drLabel:'Refunds reduce income', drDesc:'Reversals lower the total', crLabel:'Every sale adds income', crDesc:'New revenue is a credit' },
+      { title:'Expenses', type:'Expense', balance:c.expenses, sub:'Costs this period', tone:'expense',
+        drLabel:'Each cost adds up', drDesc:'Bills & purchases are debits', crLabel:'Refunds reduce costs', crDesc:'Money back is a credit' },
+      { title:'Credit Card', type:'Liability', balance:c.creditCard, sub:'Owed to card provider', tone:'liability',
+        drLabel:'Repayments lower it', drDesc:'Paying down reduces what you owe', crLabel:'New spend raises it', crDesc:'Card purchases add to the debt' },
+      { title:'Invoices · AR', type:'Asset', balance:c.ar, sub:c.arCount+' open · owed to you', tone:'asset',
+        drLabel:'Invoice sent', drDesc:'Raising one adds money owed to you', crLabel:'Customer paid', crDesc:'Payment clears the balance' },
+      { title:'Bills · AP', type:'Liability', balance:c.ap, sub:c.apCount+' open · you owe', tone:'liability',
+        drLabel:'Bill paid', drDesc:'Settling lowers what you owe', crLabel:'Bill received', crDesc:'A new bill raises what you owe' }
+    ];
+    const tones = {
+      asset:    { accent:'#5eead4', tint:'#0e1d1a', border:'#1c3a35' },
+      income:   { accent:'#6ee7a8', tint:'#0d1b14', border:'#1a3a2a' },
+      expense:  { accent:'#f0b86e', tint:'#241a0d', border:'#3a2c15' },
+      liability:{ accent:'#f49b9b', tint:'#241313', border:'#3a1f1f' }
+    };
+    return defs.map(d => ({ ...d, ...tones[d.tone], balanceStr: f(d.balance) }));
+  }
+
+  buildReport(key, c) {
+    const f = (n) => this.fmt(n, c.cur);
+    const fixed = Math.round(c.income * 0.22);
+    const totalAssets = c.bank + c.ar + fixed;
+    const totalLiab = c.creditCard + c.ap;
+    const equity = totalAssets - totalLiab;
+    const net = c.income - c.expenses;
+    const H = (label) => ({ isHead:true, label });
+    const L = (label, val, val2, indent) => ({ isLine:true, label, val: val||'', val2: val2||'', indent: (indent||0)+'px' });
+    const T = (label, val, val2) => ({ isTotal:true, label, val: val||'', val2: val2||'' });
+    const map = {
+      bs: { icon:'⚖️', title:'Balance Sheet', sub:c.name+' · as at period end', colA:'', colB:'Amount', colC:'',
+        rows:[ H('Assets'), L('Bank Account', f(c.bank)), L('Accounts Receivable', f(c.ar)), L('Fixed Assets', f(fixed)), T('Total Assets', f(totalAssets)),
+               H('Liabilities'), L('Credit Card', f(c.creditCard)), L('Accounts Payable', f(c.ap)), T('Total Liabilities', f(totalLiab)),
+               H('Equity'), L('Retained Earnings', f(equity)), T('Total Equity', f(equity)) ],
+        note:'Assets = Liabilities + Equity. Both sides equal '+f(totalAssets)+', so the sheet balances.' },
+      pl: { icon:'📈', title:'Profit & Loss', sub:c.name+' · '+c.period, colA:'', colB:'Amount', colC:'',
+        rows:[ H('Income'), L('Sales', f(c.income*0.94)), L('Other income', f(c.income*0.06)), T('Total income', f(c.income)),
+               H('Expenses'), L('Staff & subcontract', f(c.expenses*0.45)), L('Office & supplies', f(c.expenses*0.25)), L('Software & tools', f(c.expenses*0.18)), L('Other', f(c.expenses*0.12)), T('Total expenses', f(c.expenses)),
+               T('Net profit', f(net)) ],
+        note:'Net profit is income minus expenses for the period: '+f(c.income)+' − '+f(c.expenses)+' = '+f(net)+'.' },
+      tb: { icon:'📊', title:'Trial Balance', sub:c.name+' · all accounts', colA:'Account', colB:'Debit', colC:'Credit',
+        rows:[ L('Bank Account', f(c.bank), ''), L('Accounts Receivable', f(c.ar), ''), L('Fixed Assets', f(fixed), ''),
+               L('Expenses', f(c.expenses), ''), L('Credit Card', '', f(c.creditCard)), L('Accounts Payable', '', f(c.ap)),
+               L('Sales / Income', '', f(c.income)), L('Retained Earnings', '', f(equity - c.income + c.expenses > 0 ? equity - c.income + c.expenses : equity*0.4)),
+               T('Totals', f(c.bank+c.ar+fixed+c.expenses), f(c.bank+c.ar+fixed+c.expenses)) ],
+        note:'Total debits equal total credits — the fundamental check that your ledger is internally consistent.' },
+      vat: c.cur === '£'
+        ? { icon:'🧾', title:'VAT Return (9-box)', sub:c.name+' · '+c.period, colA:'Box', colB:'Amount', colC:'',
+            rows:[ L('1 · VAT due on sales', f(c.income*0.2)), L('2 · VAT due on EC acquisitions', f(0)), L('3 · Total VAT due', f(c.income*0.2)),
+                   L('4 · VAT reclaimed on purchases', f(c.expenses*0.2)), T('5 · Net VAT to pay', f(c.income*0.2 - c.expenses*0.2)),
+                   L('6 · Total sales ex VAT', f(c.income)), L('7 · Total purchases ex VAT', f(c.expenses)), L('8 · EC supplies', f(0)), L('9 · EC acquisitions', f(0)) ],
+            note:'Box 5 is what you pay HMRC: VAT collected on sales minus VAT reclaimed on purchases. MTD-ready to submit.' }
+        : { icon:'🧾', title:'Sales Tax Summary', sub:c.name+' · '+c.period, colA:'', colB:'Amount', colC:'',
+            rows:[ L('Taxable sales', f(c.income)), L('Sales tax collected (8.25%)', f(c.income*0.0825)), L('Tax paid on purchases', f(c.expenses*0.0825)), T('Net tax due', f(c.income*0.0825 - c.expenses*0.0825)) ],
+            note:'US company — sales tax shown instead of a UK VAT return. Switch to a UK company to see the 9-box return.' },
+      cf: { icon:'💧', title:'Cash Flow', sub:c.name+' · '+c.period, colA:'', colB:'Amount', colC:'',
+        rows:[ H('Operating'), L('Net profit', f(c.income - c.expenses)), L('Change in receivables', '('+f(c.ar*0.3)+')'), L('Change in payables', f(c.ap*0.2)), T('Cash from operations', f((c.income-c.expenses) - c.ar*0.3 + c.ap*0.2)),
+               H('Investing'), L('Equipment purchased', '('+f(c.income*0.05)+')'),
+               H('Financing'), L('Card repayments', '('+f(c.creditCard*0.4)+')'),
+               T('Net cash movement', f((c.income-c.expenses) - c.ar*0.3 + c.ap*0.2 - c.income*0.05 - c.creditCard*0.4)) ],
+        note:'Cash flow shows actual money moving — distinct from profit, which includes amounts invoiced but not yet paid.' },
+      ar: { icon:'⏳', title:'Aged Receivables', sub:c.name+' · '+c.arCount+' open invoices', colA:'Age', colB:'Amount', colC:'',
+        rows:[ L('Current (not due)', f(c.ar*0.5)), L('1–30 days', f(c.ar*0.3)), L('31–60 days', f(c.ar*0.15)), L('60+ days overdue', f(c.ar*0.05)), T('Total owed to you', f(c.ar)) ],
+        note:'Money customers owe you, grouped by how overdue it is. Chase the 60+ bucket first — it is most at risk.' },
+      ap: { icon:'📥', title:'Aged Payables', sub:c.name+' · '+c.apCount+' open bills', colA:'Age', colB:'Amount', colC:'',
+        rows:[ L('Current (not due)', f(c.ap*0.6)), L('1–30 days', f(c.ap*0.25)), L('31–60 days', f(c.ap*0.1)), L('60+ days overdue', f(c.ap*0.05)), T('Total you owe', f(c.ap)) ],
+        note:'Bills you owe suppliers, by due date. Pay the oldest first to protect supplier relationships and avoid late fees.' }
+    };
+    return map[key] || null;
+  }
+
+  reportDefs() {
+    return [
+      { key:'bs', label:'Balance Sheet', icon:'⚖️' },
+      { key:'pl', label:'Profit & Loss', icon:'📈' },
+      { key:'tb', label:'Trial Balance', icon:'📊' },
+      { key:'vat', label:'VAT Return', icon:'🧾' },
+      { key:'cf', label:'Cash Flow', icon:'💧' },
+      { key:'ar', label:'Aged AR / AP', icon:'⏳' }
+    ];
+  }
+
+  nextStepDefs() {
+    return [
+      { n:'1', icon:'🔗', title:'Reconcile against your bank feed', desc:'Match this £500 to the real bank line' },
+      { n:'2', icon:'📎', title:'Attach the receipt', desc:'Keeps you audit-ready for HMRC' },
+      { n:'3', icon:'🧾', title:'Confirm VAT treatment (20%)', desc:'£83.33 reclaimable on this purchase' }
+    ];
+  }
+
+  pushMsg(which, text, reply) {
+    this.setState(s => ({ appendedA: [...s.appendedA, { isUser:true, isAi:false, text }] }));
+    setTimeout(() => {
+      this.setState(s => ({ appendedA: [...s.appendedA, { isUser:false, isAi:true, text: reply }] }));
+    }, 480);
+  }
+
+  cannedReply(text) {
+    const t = (text||'').toLowerCase();
+    if (t.includes('vat')) return 'Your current VAT position for this period is a net £8,460.00 to pay HMRC. Open the VAT Return report on the left for the full 9-box breakdown — I can walk you through any box.';
+    if (t.includes('invoice')) return "Sure — tell me the customer, amount and what it's for, e.g. \"Invoice Acme Ltd £1,200 for design work\". I'll draft it, you approve, then I post the double-entry: DR Accounts Receivable, CR Sales.";
+    if (t.includes('balance') || t.includes('bank')) return 'Your bank balance is £24,580.42. That sits on the books as a debit balance because cash is an asset — money in debits it, money out credits it.';
+    if (t.includes('profit')) return 'Net profit this period is £34,090.00 (income £42,300.00 − expenses £8,210.00). Open the Profit & Loss report for the line-by-line view.';
+    return "Got it. I'll record that as a balanced double-entry and explain which accounts move and why before anything is posted. Want me to go ahead?";
+  }
+
+  renderVals() {
+    const c = this.active();
+    const cur = c.cur;
+    const balColor = c.balanced ? '#6ee7a8' : '#f0b86e';
+    const view = {
+      ...c, cur,
+      balText: c.balanced ? 'Balanced' : 'Needs review',
+      balColor,
+      balBg: c.balanced ? '#0d1b14' : '#241a0d',
+      balBorder: c.balanced ? '#1a3a2a' : '#3a2c15',
+      balDot: c.balanced ? '●' : '▲'
+    };
+
+    const companies = this.companyData().map(co => ({
+      ...co,
+      tick: co.id === this.state.companyId ? '✓' : '',
+      rowBg: co.id === this.state.companyId ? '#15211e' : 'transparent',
+      pick: () => this.setState({ companyId: co.id, menuA:false })
+    }));
+
+    const cards = this.buildCards(c);
+    const reports = this.reportDefs().map(r => ({ ...r, open: () => this.setState({ reportKey: r.key, adminOpen:false }) }));
+    const nextSteps = this.nextStepDefs().map(s => ({ ...s, go: () => this.pushMsg('A', s.title, 'Good call. ' + this.followUp(s.n)) }));
+
+    const rk = this.state.reportKey;
+    const rpt = rk ? this.buildReport(rk, c) : null;
+
+    const adminFields = [
+      { label:'Legal name', value:c.name, span:'span 1', font:'inherit' },
+      { label:'Entity type', value:c.type, span:'span 1', font:'inherit' },
+      { label:'VAT / Tax number', value:c.vatNo, span:'span 1', font:"'Geist Mono',monospace" },
+      { label:'Reporting standard', value:c.standard, span:'span 1', font:'inherit' },
+      { label:'Region', value:c.region + ' · ' + cur, span:'span 1', font:'inherit' },
+      { label:'Financial year end', value:c.yearEnd, span:'span 1', font:'inherit' },
+      { label:'Registered address', value:c.addr, span:'span 2', font:'inherit' },
+      { label:'Chart of accounts', value:c.coa + ' template', span:'span 2', font:'inherit' }
+    ];
+
+    return {
+      c: view, companies, cards,
+      reports, nextSteps,
+      menuA: this.state.menuA,
+      toggleMenuA: () => this.setState(s => ({ menuA: !s.menuA })),
+      reportOpen: !!rpt, rpt: rpt || { rows:[] },
+      adminOpen: this.state.adminOpen, adminFields,
+      openAdmin: () => this.setState({ adminOpen:true, reportKey:null, menuA:false }),
+      closeModal: () => this.setState({ reportKey:null, adminOpen:false }),
+      stop: (e) => { e.stopPropagation(); },
+      guided: this.props.guidedMode ?? true,
+      doubleEntry: this.props.doubleEntry ?? true,
+      appendedA: this.state.appendedA,
+      inA: this.state.inA,
+      typeA: (e) => this.setState({ inA: e.target.value }),
+      sendA: () => { const v=this.state.inA.trim(); if(!v)return; this.setState({inA:''}); this.pushMsg('A', v, this.cannedReply(v)); },
+      keyA: (e) => { if(e.key==='Enter'){ const v=this.state.inA.trim(); if(!v)return; this.setState({inA:''}); this.pushMsg('A', v, this.cannedReply(v)); } }
+    };
+  }
+
+  followUp(n) {
+    if (n === '1') return 'I matched it to the "WHSmith £500.00" line on your Monzo feed dated 29 Jun. Marked reconciled ✓.';
+    if (n === '2') return 'Drop the receipt in and I\'ll attach it to JE-2026-0042 and run OCR to confirm the supplier and VAT.';
+    return 'Recorded 20% VAT — £83.33 goes to Box 4 (VAT reclaimed) on your next return. Net cost of the supplies is £416.67.';
+  }
+}
+</script>
+</body>
+</html>
