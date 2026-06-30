@@ -9,66 +9,273 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import uuid
 from pathlib import Path
 
 import httpx
-import json as _json
-import logging
-import re
 from datetime import datetime, timezone
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 import uvicorn
 
-logger = logging.getLogger("chat-ui")
-
-
-def _instrument_log(module: str, function: str, event: str, **kwargs) -> None:
-    """Phase 2 structured logging for chat-ui bridge — mirrors
-    the API-side instrument.py contract-check format."""
-    entry = {
-        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-        "correlation_id": kwargs.pop("correlation_id", "no-correlation-id"),
-        "module": module,
-        "function": function,
-        "event": event,
-        "state_snapshot": kwargs,
-    }
-    logger.warning("INSTRUMENT %s", _json.dumps(entry, default=str))
-
 API_BASE_URL = os.getenv("API_BASE_URL", "http://accounting-api:8000")
 
-
-def _strip_html(text: str) -> str:
-    """Last-resort sanitizer: convert any HTML tags to plain-text equivalents
-    so the frontend's markdown renderer can process them cleanly."""
-    if not text or "<" not in text:
-        return text
-    text = re.sub(r"<(strong|b)[^>]*>(.*?)</\1>", r"**\2**", text, flags=re.IGNORECASE | re.DOTALL)
-    text = re.sub(r"<(em|i)[^>]*>(.*?)</\1>", r"*\2*", text, flags=re.IGNORECASE | re.DOTALL)
-    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
-    text = re.sub(r"</?p[^>]*>", "\n", text, flags=re.IGNORECASE)
-    text = re.sub(r"<li[^>]*>(.*?)</li>", r"- \1\n", text, flags=re.IGNORECASE | re.DOTALL)
-    text = re.sub(r"</?[ou]l[^>]*>", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"<[^>]+>", "", text)
-    return text.strip()
-
-
-def _sanitize_msg(obj):
-    """Recursively sanitize every string in a JSON-serialisable object.
-    No HTML tag can survive this — every field of every message is cleaned."""
-    if isinstance(obj, str):
-        return _strip_html(obj)
-    if isinstance(obj, dict):
-        return {k: _sanitize_msg(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_sanitize_msg(v) for v in obj]
-    return obj
-
-app = FastAPI(title="Agentic Accounting Chat UI", version="0.1.0")
+app = FastAPI(title="Agentic Accounting Chat UI", version="0.2.0")
 
 UI_DIR = Path(__file__).parent
+
+# ---------------------------------------------------------------------------
+# Mock company data — matches the new UI design's 3 companies.
+# Used as fallback when the accounting API backend is unreachable.
+# ---------------------------------------------------------------------------
+MOCK_COMPANIES = [
+    {
+        "id": "brightwork",
+        "name": "Brightwork Studio Ltd",
+        "initials": "BS",
+        "swatch": "#5eead4",
+        "type": "Ltd Company",
+        "region": "UK",
+        "currency": "£",
+        "standard": "FRS 105",
+        "vat_status": "VAT registered",
+        "vat_number": "GB 412 7785 09",
+        "period": "VAT Q1 · Apr–Jun 2026",
+        "balanced": True,
+        "last_activity": "£500 office supplies",
+        "address": "Unit 4, Gasworks, Bristol BS1 6XN",
+        "year_end": "31 March",
+        "coa_template": "UK Limited Company",
+        "bank_balance": 2458042,
+        "income": 4230000,
+        "expenses": 821000,
+        "credit_card": 194055,
+        "ar": 675000,
+        "ar_count": 3,
+        "ap": 231000,
+        "ap_count": 2,
+    },
+    {
+        "id": "marcus",
+        "name": "Marcus Reed",
+        "initials": "MR",
+        "swatch": "#7fb4ff",
+        "type": "Sole Trader",
+        "region": "UK",
+        "currency": "£",
+        "standard": "Cash basis",
+        "vat_status": "Not VAT registered",
+        "vat_number": "—",
+        "period": "Tax year 2025/26",
+        "balanced": True,
+        "last_activity": "£90 fuel",
+        "address": "12 Elm Row, Leeds LS6 2TX",
+        "year_end": "5 April",
+        "coa_template": "UK Sole Trader",
+        "bank_balance": 812010,
+        "income": 1540000,
+        "expenses": 345000,
+        "credit_card": 62000,
+        "ar": 120000,
+        "ar_count": 1,
+        "ap": 43000,
+        "ap_count": 1,
+    },
+    {
+        "id": "northgate",
+        "name": "Northgate Properties",
+        "initials": "NP",
+        "swatch": "#f0b86e",
+        "type": "LLC",
+        "region": "US",
+        "currency": "$",
+        "standard": "US GAAP",
+        "vat_status": "Sales tax",
+        "vat_number": "EIN 84-3920117",
+        "period": "FY2026 · Q2",
+        "balanced": False,
+        "last_activity": "$2,400 repairs",
+        "address": "88 Harbor Dr, Austin TX 78701",
+        "year_end": "31 December",
+        "coa_template": "US Real Estate",
+        "bank_balance": 9642000,
+        "income": 12890000,
+        "expenses": 3120000,
+        "credit_card": 540000,
+        "ar": 1830000,
+        "ar_count": 5,
+        "ap": 912000,
+        "ap_count": 4,
+    },
+]
+
+
+def _get_mock_company(company_id: str | None = None) -> dict:
+    """Return a specific company from the persistent store, falling back to built-in defaults."""
+    cid = company_id or "brightwork"
+    # Search persistent store first
+    for c in _company_store:
+        if c["id"] == cid:
+            return c
+    # Then built-in defaults
+    for c in MOCK_COMPANIES:
+        if c["id"] == cid:
+            return c
+    # Last resort: first available company
+    if _company_store:
+        return _company_store[0]
+    return MOCK_COMPANIES[0]
+
+
+def _fmt_pence(pence: int, currency: str) -> str:
+    """Format pence amount to display string."""
+    units = pence / 100
+    return f"{currency}{units:,.2f}"
+
+
+def _build_report_from_company(key: str, c: dict) -> dict | None:
+    """Build a report response from mock company data (same logic as JS buildReport)."""
+    f = lambda p: _fmt_pence(p, c["currency"])
+    income = c["income"]
+    expenses = c["expenses"]
+    bank = c["bank_balance"]
+    ar = c["ar"]
+    ap = c["ap"]
+    cc = c["credit_card"]
+    fixed = int(income * 0.22)
+    total_assets = bank + ar + fixed
+    total_liab = cc + ap
+    equity = total_assets - total_liab
+    net = income - expenses
+
+    reports = {
+        "bs": {
+            "icon": "⚖️", "title": "Balance Sheet",
+            "sub": f'{c["name"]} · as at period end',
+            "note": f'Assets = Liabilities + Equity. Both sides equal {f(total_assets)}, so the sheet balances.',
+            "columns": [{"label": "", "align": "left"}, {"label": "Amount", "align": "right"}],
+            "sections": [
+                {"type": "section_head", "label": "Assets"},
+                {"type": "line", "label": "Bank Account", "values": [f(bank)]},
+                {"type": "line", "label": "Accounts Receivable", "values": [f(ar)]},
+                {"type": "line", "label": "Fixed Assets", "values": [f(fixed)]},
+                {"type": "total", "label": "Total Assets", "values": [f(total_assets)]},
+                {"type": "section_head", "label": "Liabilities"},
+                {"type": "line", "label": "Credit Card", "values": [f(cc)]},
+                {"type": "line", "label": "Accounts Payable", "values": [f(ap)]},
+                {"type": "total", "label": "Total Liabilities", "values": [f(total_liab)]},
+                {"type": "section_head", "label": "Equity"},
+                {"type": "line", "label": "Retained Earnings", "values": [f(equity)]},
+                {"type": "total", "label": "Total Equity", "values": [f(equity)]},
+            ],
+        },
+        "pl": {
+            "icon": "📈", "title": "Profit & Loss",
+            "sub": f'{c["name"]} · {c["period"]}',
+            "note": f'Net profit is income minus expenses for the period.',
+            "columns": [{"label": "", "align": "left"}, {"label": "Amount", "align": "right"}],
+            "sections": [
+                {"type": "section_head", "label": "Income"},
+                {"type": "line", "label": "Sales", "values": [f(int(income * 0.94))]},
+                {"type": "line", "label": "Other income", "values": [f(int(income * 0.06))]},
+                {"type": "total", "label": "Total income", "values": [f(income)]},
+                {"type": "section_head", "label": "Expenses"},
+                {"type": "line", "label": "Staff & subcontract", "values": [f(int(expenses * 0.45))]},
+                {"type": "line", "label": "Office & supplies", "values": [f(int(expenses * 0.25))]},
+                {"type": "line", "label": "Software & tools", "values": [f(int(expenses * 0.18))]},
+                {"type": "line", "label": "Other", "values": [f(int(expenses * 0.12))]},
+                {"type": "total", "label": "Total expenses", "values": [f(expenses)]},
+                {"type": "total", "label": "Net profit", "values": [f(net)]},
+            ],
+        },
+        "tb": {
+            "icon": "📊", "title": "Trial Balance",
+            "sub": f'{c["name"]} · all accounts',
+            "note": "Total debits equal total credits — the fundamental check that your ledger is internally consistent.",
+            "columns": [{"label": "Account", "align": "left"}, {"label": "Debit", "align": "right"}, {"label": "Credit", "align": "right"}],
+            "sections": [
+                {"type": "line", "label": "Bank Account", "values": [f(bank), ""]},
+                {"type": "line", "label": "Accounts Receivable", "values": [f(ar), ""]},
+                {"type": "line", "label": "Fixed Assets", "values": [f(fixed), ""]},
+                {"type": "line", "label": "Expenses", "values": [f(expenses), ""]},
+                {"type": "line", "label": "Credit Card", "values": ["", f(cc)]},
+                {"type": "line", "label": "Accounts Payable", "values": ["", f(ap)]},
+                {"type": "line", "label": "Sales / Income", "values": ["", f(income)]},
+                {"type": "line", "label": "Retained Earnings", "values": ["", f(int(equity * 0.4))]},
+                {"type": "total", "label": "Totals", "values": [f(bank + ar + fixed + expenses), f(bank + ar + fixed + expenses)]},
+            ],
+        },
+        "vat": {
+            "icon": "🧾", "title": "VAT Return (9-box)" if c["currency"] == "£" else "Sales Tax Summary",
+            "sub": f'{c["name"]} · {c["period"]}',
+            "note": "Box 5 is what you pay HMRC." if c["currency"] == "£" else "US company — sales tax shown instead of UK VAT.",
+            "columns": [{"label": "Box" if c["currency"] == "£" else "", "align": "left"}, {"label": "Amount", "align": "right"}],
+            "sections": (
+                [
+                    {"type": "line", "label": "1 · VAT due on sales", "values": [f(int(income * 0.2))]},
+                    {"type": "line", "label": "2 · VAT due on EC acquisitions", "values": [f(0)]},
+                    {"type": "line", "label": "3 · Total VAT due", "values": [f(int(income * 0.2))]},
+                    {"type": "line", "label": "4 · VAT reclaimed on purchases", "values": [f(int(expenses * 0.2))]},
+                    {"type": "total", "label": "5 · Net VAT to pay", "values": [f(int(income * 0.2) - int(expenses * 0.2))]},
+                    {"type": "line", "label": "6 · Total sales ex VAT", "values": [f(income)]},
+                    {"type": "line", "label": "7 · Total purchases ex VAT", "values": [f(expenses)]},
+                    {"type": "line", "label": "8 · EC supplies", "values": [f(0)]},
+                    {"type": "line", "label": "9 · EC acquisitions", "values": [f(0)]},
+                ] if c["currency"] == "£" else [
+                    {"type": "line", "label": "Taxable sales", "values": [f(income)]},
+                    {"type": "line", "label": "Sales tax collected (8.25%)", "values": [f(int(income * 0.0825))]},
+                    {"type": "line", "label": "Tax paid on purchases", "values": [f(int(expenses * 0.0825))]},
+                    {"type": "total", "label": "Net tax due", "values": [f(int(income * 0.0825) - int(expenses * 0.0825))]},
+                ]
+            ),
+        },
+        "cf": {
+            "icon": "💧", "title": "Cash Flow",
+            "sub": f'{c["name"]} · {c["period"]}',
+            "note": "Cash flow shows actual money moving — distinct from profit.",
+            "columns": [{"label": "", "align": "left"}, {"label": "Amount", "align": "right"}],
+            "sections": [
+                {"type": "section_head", "label": "Operating"},
+                {"type": "line", "label": "Net profit", "values": [f(net)]},
+                {"type": "line", "label": "Change in receivables", "values": [f"({f(int(ar * 0.3))})"]},
+                {"type": "line", "label": "Change in payables", "values": [f(int(ap * 0.2))]},
+                {"type": "total", "label": "Cash from operations", "values": [f(net - int(ar * 0.3) + int(ap * 0.2))]},
+                {"type": "section_head", "label": "Investing"},
+                {"type": "line", "label": "Equipment purchased", "values": [f"({f(int(income * 0.05))})"]},
+                {"type": "section_head", "label": "Financing"},
+                {"type": "line", "label": "Card repayments", "values": [f"({f(int(cc * 0.4))})"]},
+                {"type": "total", "label": "Net cash movement", "values": [f(net - int(ar * 0.3) + int(ap * 0.2) - int(income * 0.05) - int(cc * 0.4))]},
+            ],
+        },
+        "ar": {
+            "icon": "⏳", "title": "Aged Receivables",
+            "sub": f'{c["name"]} · {c["ar_count"]} open invoices',
+            "note": "Money customers owe you. Chase the 60+ bucket first.",
+            "columns": [{"label": "Age", "align": "left"}, {"label": "Amount", "align": "right"}],
+            "sections": [
+                {"type": "line", "label": "Current (not due)", "values": [f(int(ar * 0.5))]},
+                {"type": "line", "label": "1–30 days", "values": [f(int(ar * 0.3))]},
+                {"type": "line", "label": "31–60 days", "values": [f(int(ar * 0.15))]},
+                {"type": "line", "label": "60+ days overdue", "values": [f(int(ar * 0.05))]},
+                {"type": "total", "label": "Total owed to you", "values": [f(ar)]},
+            ],
+        },
+        "ap": {
+            "icon": "📥", "title": "Aged Payables",
+            "sub": f'{c["name"]} · {c["ap_count"]} open bills',
+            "note": "Bills you owe suppliers. Pay the oldest first.",
+            "columns": [{"label": "Age", "align": "left"}, {"label": "Amount", "align": "right"}],
+            "sections": [
+                {"type": "line", "label": "Current (not due)", "values": [f(int(ap * 0.6))]},
+                {"type": "line", "label": "1–30 days", "values": [f(int(ap * 0.25))]},
+                {"type": "line", "label": "31–60 days", "values": [f(int(ap * 0.1))]},
+                {"type": "line", "label": "60+ days overdue", "values": [f(int(ap * 0.05))]},
+                {"type": "total", "label": "Total you owe", "values": [f(ap)]},
+            ],
+        },
+    }
+    return reports.get(key)
 
 
 @app.get("/")
@@ -112,6 +319,51 @@ async def account():
         return {"backend_configured": False, "api_base_url": API_BASE_URL}
 
 
+
+# ---------------------------------------------------------------------------
+# LLM Configuration — stored in memory, initialized from env
+# ---------------------------------------------------------------------------
+LLM_CONFIG = {
+    "api_url": os.getenv("LLM_API_URL", "https://api.deepseek.com/v1/chat/completions"),
+    "model": os.getenv("LLM_MODEL", "deepseek-v4-pro"),
+    "api_key": os.getenv("LLM_API_KEY", ""),
+}
+
+
+@app.get("/api/llm-config")
+async def get_llm_config():
+    """Return current LLM configuration (key masked)."""
+    return {
+        "api_url": LLM_CONFIG["api_url"],
+        "model": LLM_CONFIG["model"],
+        "api_key": LLM_CONFIG["api_key"][:8] + "***" if LLM_CONFIG["api_key"] else "",
+        "has_key": bool(LLM_CONFIG["api_key"]),
+    }
+
+
+@app.post("/api/llm-config")
+async def update_llm_config(data: dict):
+    """Update LLM configuration. Persists to env for the API bridge."""
+    global LLM_CONFIG
+    for field in ("api_url", "model", "api_key"):
+        if field in data and data[field]:
+            LLM_CONFIG[field] = data[field]
+    # Push to accounting API so the LLM chat can use the new key
+    if LLM_CONFIG["api_key"]:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                await client.post(
+                    f"{API_BASE_URL}/api/v1/chat/llm-config",
+                    json={
+                        "api_url": LLM_CONFIG["api_url"],
+                        "model": LLM_CONFIG["model"],
+                        "api_key": LLM_CONFIG["api_key"],
+                    },
+                )
+        except Exception:
+            pass
+    return {"status": "ok", "config": {k: v for k, v in LLM_CONFIG.items() if k != "api_key"}}
+
 @app.post("/api/settings")
 async def update_settings(data: dict):
     """Update API backend URL (runtime override)."""
@@ -124,6 +376,356 @@ async def update_settings(data: dict):
 
 
 # ---------------------------------------------------------------------------
+# Company persistence — stored in memory, backed by JSON file on disk
+# ---------------------------------------------------------------------------
+_COMPANIES_FILE = UI_DIR / "data" / "companies.json"
+_company_store: list[dict] = []
+
+
+def _load_companies() -> list[dict]:
+    """Load companies from disk, falling back to built-in defaults."""
+    global _company_store
+    if _COMPANIES_FILE.exists():
+        try:
+            _company_store = json.loads(_COMPANIES_FILE.read_text())
+            if _company_store:
+                return _company_store
+        except (json.JSONDecodeError, OSError):
+            pass
+    _company_store = [dict(c) for c in MOCK_COMPANIES]
+    _save_companies()
+    return _company_store
+
+
+def _save_companies() -> None:
+    """Persist current company store to disk."""
+    try:
+        _COMPANIES_FILE.write_text(json.dumps(_company_store, indent=2))
+    except OSError:
+        pass
+
+
+# Load on startup
+UI_DIR.joinpath("data").mkdir(exist_ok=True)
+_company_store = _load_companies()
+
+
+@app.get("/api/companies")
+async def list_companies():
+    """Return all companies in the persistent store."""
+    return {
+        "companies": [
+            {
+                "id": c["id"],
+                "name": c["name"],
+                "initials": c["initials"],
+                "swatch": c["swatch"],
+                "type": c["type"],
+                "region": c["region"],
+                "currency": c["currency"],
+                "vat_status": c.get("vat_status", c.get("vat", "")),
+            }
+            for c in _company_store
+        ],
+        "source": "local",
+    }
+
+
+@app.post("/api/companies")
+async def create_company(data: dict):
+    """Create a new company. Persists to disk."""
+    name = (data.get("name") or "").strip()
+    if not name:
+        return {"error": "Company name is required."}
+    ctype = data.get("type", "Ltd Company")
+    region = data.get("region", "UK")
+    currency = "£" if region == "UK" else "$"
+    swatches = ["#5eead4", "#7fb4ff", "#f0b86e", "#f49b9b", "#6ee7a8", "#a78bfa"]
+    new_id = f"co-{uuid.uuid4().hex[:8]}"
+    initials = "".join(w[0] for w in name.split())[:3].upper()
+    company = {
+        "id": new_id,
+        "name": name,
+        "initials": initials,
+        "swatch": swatches[len(_company_store) % len(swatches)],
+        "type": ctype,
+        "region": region,
+        "currency": currency,
+        "standard": "FRS 105" if region == "UK" else "US GAAP",
+        "vat_status": "VAT registered" if region == "UK" else "Sales tax",
+        "vat_number": "—",
+        "period": "Current period",
+        "balanced": True,
+        "last_activity": "—",
+        "address": data.get("address", "—"),
+        "year_end": data.get("year_end", "—"),
+        "coa_template": f"{'UK' if region == 'UK' else 'US'} {ctype}",
+        "bank_balance": 0,
+        "income": 0,
+        "expenses": 0,
+        "credit_card": 0,
+        "ar": 0,
+        "ar_count": 0,
+        "ap": 0,
+        "ap_count": 0,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _company_store.append(company)
+    _save_companies()
+    return {"status": "ok", "company": company}
+
+
+@app.patch("/api/companies/{company_id}")
+async def update_company(company_id: str, data: dict):
+    """Update an existing company's editable fields. Accepts both camelCase and snake_case."""
+    # Normalize camelCase → snake_case
+    FIELD_MAP = {
+        "name": "name", "type": "type", "region": "region",
+        "address": "address", "addr": "address",
+        "year_end": "year_end", "yearEnd": "year_end",
+        "vat_status": "vat_status", "vatStatus": "vat_status",
+        "vat_number": "vat_number", "vatNo": "vat_number", "vat_number": "vat_number",
+    }
+    for c in _company_store:
+        if c["id"] == company_id:
+            for key, value in data.items():
+                mapped = FIELD_MAP.get(key)
+                if mapped and value:
+                    c[mapped] = value
+            if "name" in data and data["name"]:
+                c["initials"] = "".join(w[0] for w in data["name"].split())[:3].upper()
+            _save_companies()
+            return {"status": "ok", "company": c}
+    return {"error": "Company not found."}
+
+
+@app.get("/api/dashboard")
+async def dashboard(company_id: str = "brightwork"):
+    """Return aggregated dashboard data.
+
+    Built-in companies (brightwork/marcus/northgate): live data from API.
+    Locally-created companies: local store data only (zero until multi-tenancy).
+    """
+    c = None
+    for entry in _company_store:
+        if entry["id"] == company_id:
+            c = entry
+            break
+    if c is None:
+        c = _company_store[0] if _company_store else MOCK_COMPANIES[0]
+
+    currency = c.get("currency", "£")
+    balanced = c.get("balanced", True)
+    last_activity = c.get("last_activity", "—")
+    cards = []
+    source = "local"
+    BUILT_IN_IDS = {"brightwork", "marcus", "northgate"}
+
+    if company_id in BUILT_IN_IDS:
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                coa_resp = await client.get(f"{API_BASE_URL}/api/v1/coa")
+                bank_resp = await client.get(f"{API_BASE_URL}/api/v1/bank/accounts")
+                bank_accounts = []
+                total_bank = 0
+                if bank_resp.status_code == 200:
+                    bank_data = bank_resp.json()
+                    bank_accounts = bank_data if isinstance(bank_data, list) else bank_data.get("accounts", [])
+                    total_bank = sum(a.get("current_balance", 0) for a in bank_accounts)
+
+                txn_resp = await client.get(f"{API_BASE_URL}/api/v1/transactions/?limit=5")
+                if txn_resp.status_code == 200:
+                    txn_data = txn_resp.json()
+                    transactions = txn_data if isinstance(txn_data, list) else txn_data.get("transactions", [])
+                    if transactions:
+                        last_txn = transactions[0]
+                        desc = last_txn.get("description", "")
+                        amt = last_txn.get("total_amount", 0)
+                        last_activity = f"{_fmt_pence(amt, currency)} {desc}" if amt else desc
+
+                bs_resp = await client.post(
+                    f"{API_BASE_URL}/api/v1/reports/run",
+                    json={"template_name": "balance_sheet", "start_date": "2026-01-01", "end_date": "2026-12-31"},
+                )
+                bs_data = bs_resp.json() if bs_resp.status_code == 200 else None
+
+                pl_resp = await client.post(
+                    f"{API_BASE_URL}/api/v1/reports/run",
+                    json={"template_name": "profit_and_loss", "start_date": "2026-01-01", "end_date": "2026-12-31"},
+                )
+                pl_data = pl_resp.json() if pl_resp.status_code == 200 else None
+
+                source = "backend"
+                income_total = pl_data.get("revenue", {}).get("total", 0) if pl_data else 0
+                expenses_total = pl_data.get("expenses", {}).get("total", 0) if pl_data else 0
+                ar_total = bs_data.get("accounts_receivable", 0) if bs_data else 0
+                ap_total = bs_data.get("accounts_payable", 0) if bs_data else 0
+                if bs_data:
+                    total_assets = bs_data.get("total_assets", 0)
+                    total_liab = bs_data.get("total_liabilities", 0)
+                    total_equity = bs_data.get("total_equity", 0)
+                    balanced = abs(total_assets - (total_liab + total_equity)) < 100
+
+                bs_bank = total_bank
+                if bs_data:
+                    bs_report = bs_data.get("report", bs_data)
+                    current_assets = bs_report.get("current_assets", {})
+                    for acct in current_assets.get("accounts", []):
+                        if "bank" in acct.get("account_name", "").lower():
+                            bs_bank = acct.get("amount", bs_bank)
+                            break
+                    if bs_bank == 0 and current_assets.get("subtotal", 0) > 0:
+                        bs_bank = current_assets["subtotal"]
+
+                cards = [
+                    {"title": "Bank Account", "type": "Asset", "tone": "asset",
+                     "balance": _fmt_pence(bs_bank, currency), "sub": f"{len(bank_accounts)} account(s)" if bank_accounts else "Current account",
+                     "dr_label": "Money in", "dr_desc": "Deposits & receipts raise your cash",
+                     "cr_label": "Money out", "cr_desc": "Payments & withdrawals reduce it"},
+                    {"title": "Sales / Income", "type": "Income", "tone": "income",
+                     "balance": _fmt_pence(income_total, currency), "sub": "Revenue this period",
+                     "dr_label": "Refunds reduce income", "dr_desc": "Reversals lower the total",
+                     "cr_label": "Every sale adds income", "cr_desc": "New revenue is a credit"},
+                    {"title": "Expenses", "type": "Expense", "tone": "expense",
+                     "balance": _fmt_pence(expenses_total, currency), "sub": "Costs this period",
+                     "dr_label": "Each cost adds up", "dr_desc": "Bills & purchases are debits",
+                     "cr_label": "Refunds reduce costs", "cr_desc": "Money back is a credit"},
+                    {"title": "Credit Card", "type": "Liability", "tone": "liability",
+                     "balance": _fmt_pence(0, currency), "sub": "No card accounts",
+                     "dr_label": "Repayments lower it", "dr_desc": "Paying down reduces what you owe",
+                     "cr_label": "New spend raises it", "cr_desc": "Card purchases add to the debt"},
+                    {"title": "Invoices · AR", "type": "Asset", "tone": "asset",
+                     "balance": _fmt_pence(ar_total, currency), "sub": "Money owed to you",
+                     "dr_label": "Invoice sent", "dr_desc": "Raising one adds money owed to you",
+                     "cr_label": "Customer paid", "cr_desc": "Payment clears the balance"},
+                    {"title": "Bills · AP", "type": "Liability", "tone": "liability",
+                     "balance": _fmt_pence(ap_total, currency), "sub": "Money you owe",
+                     "dr_label": "Bill paid", "dr_desc": "Settling lowers what you owe",
+                     "cr_label": "Bill received", "cr_desc": "A new bill raises what you owe"},
+                ]
+        except Exception:
+            pass
+
+    if not cards:
+        cards = [
+            {"title": "Bank Account", "type": "Asset", "tone": "asset",
+             "balance": _fmt_pence(c.get("bank_balance", 0), currency), "sub": "Current account",
+             "dr_label": "Money in", "dr_desc": "Deposits & receipts raise your cash",
+             "cr_label": "Money out", "cr_desc": "Payments & withdrawals reduce it"},
+            {"title": "Sales / Income", "type": "Income", "tone": "income",
+             "balance": _fmt_pence(c.get("income", 0), currency), "sub": "Revenue earned this period",
+             "dr_label": "Refunds reduce income", "dr_desc": "Reversals lower the total",
+             "cr_label": "Every sale adds income", "cr_desc": "New revenue is a credit"},
+            {"title": "Expenses", "type": "Expense", "tone": "expense",
+             "balance": _fmt_pence(c.get("expenses", 0), currency), "sub": "Costs this period",
+             "dr_label": "Each cost adds up", "dr_desc": "Bills & purchases are debits",
+             "cr_label": "Refunds reduce costs", "cr_desc": "Money back is a credit"},
+            {"title": "Credit Card", "type": "Liability", "tone": "liability",
+             "balance": _fmt_pence(c.get("credit_card", 0), currency), "sub": "Owed to card provider",
+             "dr_label": "Repayments lower it", "dr_desc": "Paying down reduces what you owe",
+             "cr_label": "New spend raises it", "cr_desc": "Card purchases add to the debt"},
+            {"title": "Invoices · AR", "type": "Asset", "tone": "asset",
+             "balance": _fmt_pence(c.get("ar", 0), currency), "sub": f'{c.get("ar_count", 0)} open',
+             "dr_label": "Invoice sent", "dr_desc": "Raising one adds money owed to you",
+             "cr_label": "Customer paid", "cr_desc": "Payment clears the balance"},
+            {"title": "Bills · AP", "type": "Liability", "tone": "liability",
+             "balance": _fmt_pence(c.get("ap", 0), currency), "sub": f'{c.get("ap_count", 0)} open',
+             "dr_label": "Bill paid", "dr_desc": "Settling lowers what you owe",
+             "cr_label": "Bill received", "cr_desc": "A new bill raises what you owe"},
+        ]
+        source = "local"
+
+    bal_color = "#6ee7a8" if balanced else "#f0b86e"
+    bal_bg = "#0d1b14" if balanced else "#241a0d"
+    bal_border = "#1a3a2a" if balanced else "#3a2c15"
+
+    return {
+        "company": {
+            "id": c["id"], "name": c["name"], "initials": c.get("initials", ""),
+            "swatch": c.get("swatch", "#5eead4"), "type": c.get("type", ""),
+            "region": c.get("region", "UK"), "currency": currency,
+            "standard": c.get("standard", ""), "vat_status": c.get("vat_status", ""),
+            "vat_number": c.get("vat_number", "—"), "period": c.get("period", ""),
+            "last_activity": last_activity, "address": c.get("address", ""),
+            "year_end": c.get("year_end", ""), "coa_template": c.get("coa_template", ""),
+        },
+        "status": {
+            "balanced": balanced, "text": "Balanced" if balanced else "Needs review",
+            "color": bal_color, "background": bal_bg, "border_color": bal_border,
+            "dot": "●" if balanced else "▲",
+        },
+        "cards": cards,
+        "source": source,
+    }
+
+
+
+@app.get("/api/reports/{report_type}")
+async def get_report(report_type: str, company_id: str = "brightwork"):
+    """Return a specific report for the active company.
+
+    Tries the accounting API report endpoint first; falls back to
+    computed mock data.
+    """
+    valid_types = {"bs", "pl", "tb", "vat", "cf", "ar", "ap"}
+    if report_type not in valid_types:
+        return {"error": f"Unknown report type: {report_type}. Valid: {', '.join(sorted(valid_types))}"}
+
+    c = _get_mock_company(company_id)
+    # Always query the API for reports. Single-tenant — shared data.
+    if True:
+    # Query the API — single-tenant, data is shared across company profiles
+        try:
+            type_map = {
+                "bs": "balance_sheet", "pl": "profit_and_loss",
+                "tb": "trial_balance", "ar": "aged_receivables", "ap": "aged_payables",
+            }
+            if report_type in type_map:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.post(
+                        f"{API_BASE_URL}/api/v1/reports/run",
+                        json={
+                            "template_name": type_map[report_type],
+                            "start_date": "2026-01-01",
+                            "end_date": "2026-12-31",
+                        },
+                    )
+                    if resp.status_code == 200:
+                        transformed = _transform_api_report(resp.json(), report_type, c)
+                        if transformed:
+                            return {**transformed, "source": "backend"}
+            if report_type == "vat":
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    periods_resp = await client.get(f"{API_BASE_URL}/api/v1/vat/periods")
+                    if periods_resp.status_code == 200:
+                        periods = periods_resp.json()
+                        if periods:
+                            pid = periods[0].get("id") if isinstance(periods, list) else list(periods.get("periods", []))[0].get("id") if isinstance(periods, dict) else None
+                            if pid:
+                                calc_resp = await client.post(f"{API_BASE_URL}/api/v1/vat/periods/{pid}/calculate")
+                                if calc_resp.status_code == 200:
+                                    return {**calc_resp.json(), "source": "backend"}
+        except Exception:
+            pass
+
+    # Compute report from company store data
+    report = _build_report_from_company(report_type, c)
+    if report is None:
+        return {"error": f"Report type '{report_type}' not available"}
+    return {**report, "source": "local"}
+
+
+# ---------------------------------------------------------------------------
+
+def _clean_llm_response(text: str) -> str:
+    """Remove internal pence formatting from LLM responses."""
+    import re
+    # Remove "(X,XXX,XXX pence)" patterns
+    text = re.sub(r'\([\d,]+ pence\)', '', text)
+    # Remove standalone "X,XXX,XXX pence" references
+    text = re.sub(r'\b[\d,]+\s+pence\b', '', text)
+    return text.strip()
+
 # WebSocket chat bridge
 # ---------------------------------------------------------------------------
 
@@ -149,167 +751,126 @@ async def websocket_chat(ws: WebSocket):
     try:
         import websockets as ws_client
 
-        async def forward_to_backend(backend):
-            """Read browser messages, translate, and send to backend."""
-            try:
-                while True:
-                    data = await ws.receive_text()
-                    msg = json.loads(data)
-                    msg_type = msg.get("type", "message")
+        async with ws_client.connect(backend_ws_url) as backend:
 
-                    if msg_type == "message":
-                        content = msg.get("content", "")
-                        persona = msg.get("persona", "professional")
-                        # ── I7: log every user message through bridge ────
-                        _instrument_log(
-                            "chat_ui_bridge", "forward_to_backend", "message_forward",
-                            correlation_id="via-websocket-bridge",
-                            direction="browser_to_backend",
-                            msg_type="message",
-                            content_chars=len(content),
-                            session_id=session_id,
-                        )
-                        await backend.send(json.dumps({
-                            "type": "user_message",
-                            "session_id": session_id,
-                            "content": content,
-                            "persona": persona,
-                        }))
-                    elif msg_type in ("confirm", "reject"):
-                        await backend.send(json.dumps({
-                            "type": "confirmation_response",
-                            "session_id": session_id,
-                            "confirmed": msg_type == "confirm",
-                        }))
-                    elif msg_type == "stop":
-                        # Forward stop to backend so it can cancel processing
-                        try:
-                            await backend.send(json.dumps({"type": "stop", "session_id": session_id}))
-                        except Exception:
-                            pass
-                        await ws.send_text(json.dumps({
-                            "type": "cancelled",
-                            "content": "Processing stopped.",
-                        }))
-                    elif msg_type == "ping":
-                        await ws.send_text(json.dumps({"type": "pong"}))
+            async def forward_to_backend():
+                """Read browser messages, translate, and send to backend."""
+                try:
+                    while True:
+                        data = await ws.receive_text()
+                        msg = json.loads(data)
+                        msg_type = msg.get("type", "message")
 
-            except WebSocketDisconnect:
-                pass
-
-        async def forward_to_browser(backend):
-            """Read backend messages, translate, and send to browser."""
-            _send = lambda m: ws.send_text(json.dumps(_sanitize_msg(m)))
-            try:
-                async for raw in backend:
-                    msg = json.loads(raw)
-                    msg_type = msg.get("type", "")
-
-                    if msg_type == "error":
-                        await _send({
-                            "type": "error",
-                            "content": msg.get("message", msg.get("content", "Backend error")),
-                        })
-
-                    elif msg_type == "tool_call":
-                        skill_id = msg.get("skill_id", "unknown")
-                        params = msg.get("params", {})
-                        await _send({
-                            "type": "tool_calls",
-                            "content": f"Invoking {skill_id}...",
-                            "tools": [{
-                                "id": msg.get("tool_call_id", ""),
-                                "name": skill_id,
-                                "args": params,
-                            }],
-                        })
-                        await _send({
-                            "type": "thinking",
-                            "content": f"Processing {skill_id}...",
-                        })
-
-                    elif msg_type == "tool_result":
-                        result_data = msg.get("result", {})
-                        response = result_data.get("response", "")
-                        skill_name = result_data.get("skill", "unknown")
-                        persona = result_data.get("persona", "professional")
-
-                        await _send({
-                            "type": "text",
-                            "content": response or f"Completed {skill_name}.",
-                            "persona": persona,
-                            "session_id": session_id,
-                        })
-
-                    elif msg_type == "confirmation_request":
-                        await _send({
-                            "type": "confirm_request",
-                            "content": msg.get("message", "Confirm this action?"),
-                            "tools": [msg.get("action", "unknown")],
-                        })
-
-                    elif msg_type == "stream_start":
-                        pass  # Skip — tokens follow
-
-                    elif msg_type in ("stream_token", "stream_end"):
-                        token = msg.get("token", msg.get("content", ""))
-                        if token:
-                            await _send({
-                                "type": "text",
-                                "content": token,
-                            })
-
-                    else:
-                        content = msg.get("content", "")
-                        if content:
-                            await _send({
-                                "type": "text",
+                        if msg_type == "message":
+                            content = msg.get("content", "")
+                            persona = msg.get("persona", "professional")
+                            await backend.send(json.dumps({
+                                "type": "user_message",
+                                "session_id": session_id,
                                 "content": content,
-                            })
+                                "persona": persona,
+                            }))
+                        elif msg_type in ("confirm", "reject"):
+                            # Map confirm/reject to confirmation_response
+                            await backend.send(json.dumps({
+                                "type": "confirmation_response",
+                                "session_id": session_id,
+                                "confirmed": msg_type == "confirm",
+                            }))
+                        elif msg_type == "stop":
+                            await ws.send_text(json.dumps({
+                                "type": "cancelled",
+                                "content": "Processing stopped.",
+                            }))
+                        elif msg_type == "ping":
+                            await ws.send_text(json.dumps({"type": "pong"}))
 
-            except Exception as exc:
-                logger.warning("forward_to_browser: backend connection error: %s", exc)
+                except WebSocketDisconnect:
+                    pass
 
-        # ── Reconnection loop with exponential backoff ────────────────────
-        retry_delay = 1
-        max_delay = 30
+            async def forward_to_browser():
+                """Read backend messages, translate, and send to browser."""
+                try:
+                    async for raw in backend:
+                        msg = json.loads(raw)
+                        msg_type = msg.get("type", "")
 
-        while True:
-            try:
-                async with ws_client.connect(
-                    backend_ws_url,
-                    ping_interval=20,
-                    ping_timeout=20,
-                    close_timeout=10,
-                ) as backend:
-                    retry_delay = 1  # reset on successful connect
-                    logger.info("Connected to accounting backend WebSocket (session %s)", session_id)
-                    await ws.send_text(json.dumps({
-                        "type": "backend_reconnected",
-                        "session_id": session_id,
-                    }))
-                    await asyncio.gather(
-                        forward_to_backend(backend),
-                        forward_to_browser(backend),
-                    )
-            except (WebSocketDisconnect, ws_client.exceptions.ConnectionClosedOK):
-                logger.info("Browser WebSocket closed cleanly (session %s)", session_id)
-                break
-            except ws_client.exceptions.ConnectionClosedError as e:
-                logger.warning("Backend WebSocket closed: %s — retrying in %ds", e, retry_delay)
-                await asyncio.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, max_delay)
-            except Exception as e:
-                logger.error("Bridge error (session %s): %s", session_id, e)
-                await asyncio.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, max_delay)
-        # ── End reconnection loop ─────────────────────────────────────────
+                        if msg_type == "error":
+                            await ws.send_text(json.dumps({
+                                "type": "error",
+                                "content": msg.get("message", msg.get("content", "Backend error")),
+                            }))
+
+                        elif msg_type == "tool_call":
+                            skill_id = msg.get("skill_id", "unknown")
+                            params = msg.get("params", {})
+                            await ws.send_text(json.dumps({
+                                "type": "tool_calls",
+                                "content": f"Invoking {skill_id}...",
+                                "tools": [{
+                                    "id": msg.get("tool_call_id", ""),
+                                    "name": skill_id,
+                                    "args": params,
+                                }],
+                            }))
+                            await ws.send_text(json.dumps({
+                                "type": "thinking",
+                                "content": f"Processing {skill_id}...",
+                            }))
+
+                        elif msg_type == "tool_result":
+                            result_data = msg.get("result", {})
+                            response = result_data.get("response", "")
+                            skill_name = result_data.get("skill", "unknown")
+                            persona = result_data.get("persona", "professional")
+
+                            await ws.send_text(json.dumps({
+                                "type": "text",
+                                "content": _clean_llm_response(response) or f"Completed {skill_name}.",
+                                "persona": persona,
+                                "session_id": session_id,
+                            }))
+
+                        elif msg_type == "confirmation_request":
+                            await ws.send_text(json.dumps({
+                                "type": "confirm_request",
+                                "content": msg.get("message", "Confirm this action?"),
+                                "tools": [msg.get("action", "unknown")],
+                            }))
+
+                        elif msg_type == "stream_start":
+                            pass  # Skip — tokens follow
+
+                        elif msg_type in ("stream_token", "stream_end"):
+                            token = msg.get("token", msg.get("content", ""))
+                            if token:
+                                # Accumulated streaming handled by client
+                                await ws.send_text(json.dumps({
+                                    "type": "text",
+                                    "content": _clean_llm_response(token),
+                                }))
+
+                        else:
+                            # Unknown message type — pass through as text if content exists
+                            content = msg.get("content", "")
+                            if content:
+                                await ws.send_text(json.dumps({
+                                    "type": "text",
+                                    "content": str(content),
+                                }))
+
+                except Exception:
+                    pass
+
+            await asyncio.gather(
+                forward_to_backend(),
+                forward_to_browser(),
+            )
 
     except ImportError:
         # websockets lib not available — fall back to HTTP REST bridge
         await _fallback_http_bridge(ws, session_id)
     except Exception as e:
-        logger.error("Fatal bridge error (session %s): %s", session_id, e)
         await ws.send_text(json.dumps({
             "type": "error",
             "content": f"Cannot connect to accounting backend: {e}",
@@ -1062,20 +1623,17 @@ function debug(msg) {
 
   function renderMarkdown(text) {
     if (!text) return '';
-    // Strip raw HTML tags the LLM might emit (it should use markdown, but
-    // sometimes it returns <br>, <strong>, <ul>, etc. — clean those up).
-    var cleaned = text.replace(/<[^>]*>/g, '');
-    return cleaned
+    return text
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/```([^`]+)```/g, '<pre>$1</pre>')
+      .replace(/```([\\s\\S]*?)```/g, '<pre>$1</pre>')
       .replace(/^### (.+)/gm, '<strong>$1</strong>')
       .replace(/^## (.+)/gm, '<strong>$1</strong>')
       .replace(/^# (.+)/gm, '<strong>$1</strong>')
       .replace(/^- (.+)/gm, '\u2022 $1')
-      .replace(/\n/g, '<br>');
+      .replace(/\\n/g, '<br>');
   }
 
   function esc(s) {

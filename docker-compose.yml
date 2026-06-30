@@ -256,6 +256,8 @@ services:
     environment:
       API_BASE_URL: http://accounting-api:8000
       WS_URL: ws://accounting-api:8000/ws
+    volumes:
+      - ./chat-ui/data:/app/data
     depends_on:
       accounting-api:
         condition: service_started
