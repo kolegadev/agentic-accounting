@@ -122,6 +122,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_PASSWORD:-minioadmin}
       FORNANCE_LEDGER_URL: http://formance-ledger:3068
       KATRA_MCP_URL: http://accounting-katra-server:3113/mcp
+      KATRA_API_KEY: ${KATRA_API_KEY:-katra-mcp-key-2026}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LLM_API_URL: ${LLM_API_URL:-https://api.deepseek.com/v1/chat/completions}
       LLM_API_KEY: ${LLM_API_KEY:-}
