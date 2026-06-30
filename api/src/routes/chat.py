@@ -39,6 +39,8 @@ async def chat_websocket(websocket: WebSocket, session_id: str) -> None:
     _cancel_current = False  # flag for stop requests
 
     try:
+        cancel_event: "asyncio.Event | None" = None
+
         while True:
             raw = await websocket.receive_text()
             try:
@@ -57,6 +59,8 @@ async def chat_websocket(websocket: WebSocket, session_id: str) -> None:
 
             # ── Handle stop/cancel requests ──────────────────────────
             if msg_type == "stop":
+                if cancel_event is not None:
+                    cancel_event.set()
                 _cancel_current = True
                 logger.info("Stop requested for session %s", session_id)
                 await websocket.send_text(json.dumps({
@@ -76,9 +80,23 @@ async def chat_websocket(websocket: WebSocket, session_id: str) -> None:
 
             # Process the message through the chat pipeline (with timeout)
             _cancel_current = False
+            cancel_event = asyncio.Event()
+
+            # Progress callback — sends intermediate tool-call notifications
+            async def _send_progress(skill_id: str, params: dict, step: int, total: int) -> None:
+                await websocket.send_text(json.dumps({
+                    "type": "tool_calls",
+                    "content": f"Step {step}/{total}: {skill_id}...",
+                    "tools": [{"id": "", "name": skill_id, "args": params}],
+                }))
+
             try:
                 result = await asyncio.wait_for(
-                    _chat_service.process_message(session_id, content),
+                    _chat_service.process_message(
+                        session_id, content,
+                        cancel_event=cancel_event,
+                        on_tool_start=_send_progress,
+                    ),
                     timeout=PROCESSING_TIMEOUT,
                 )
             except asyncio.TimeoutError:
@@ -86,6 +104,13 @@ async def chat_websocket(websocket: WebSocket, session_id: str) -> None:
                 await websocket.send_text(json.dumps({
                     "type": "error",
                     "content": "Request timed out — please try a shorter query.",
+                }))
+                continue
+            except asyncio.CancelledError:
+                logger.info("Processing cancelled by user (session %s)", session_id)
+                await websocket.send_text(json.dumps({
+                    "type": "cancelled",
+                    "content": "Processing stopped.",
                 }))
                 continue
             except Exception as exc:

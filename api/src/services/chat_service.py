@@ -7,12 +7,13 @@ as context and generates natural language responses.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import re
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from src.services.llm_router import LLMRouter
 from src.services.tool_executor import ToolExecutor
@@ -185,7 +186,14 @@ class ChatService:
     # ------------------------------------------------------------------
     # main pipeline — every response is LLM-generated
     # ------------------------------------------------------------------
-    async def process_message(self, session_id: str, message: str) -> dict[str, Any]:
+    async def process_message(
+        self,
+        session_id: str,
+        message: str,
+        *,
+        cancel_event: "asyncio.Event | None" = None,
+        on_tool_start: "Callable | None" = None,
+    ) -> dict[str, Any]:
         cid = new_correlation_id()
         state = await self.get_conversation_state(session_id)
         history: list[dict[str, Any]] = state.get("history", [])
@@ -241,7 +249,11 @@ class ChatService:
         chain_message = message
         MAX_CHAIN = 5
 
-        for _ in range(MAX_CHAIN):
+        for step in range(MAX_CHAIN):
+            # ── Check for user cancellation ───────────────────────
+            if cancel_event and cancel_event.is_set():
+                raise asyncio.CancelledError("Cancelled by user")
+
             route_result = await self._llm_router.route(
                 chain_message, history, context, account_count,
             )
@@ -252,6 +264,18 @@ class ChatService:
             # ── Execute the tool ──────────────────────────────────
             skill_id = route_result["tool"]
             params = route_result.get("params", {})
+
+            # ── Progress notification ────────────────────────────
+            if on_tool_start:
+                try:
+                    await on_tool_start(skill_id, params, step + 1, MAX_CHAIN)
+                except Exception:
+                    pass  # never let progress errors block the pipeline
+
+            # ── Check again after progress (user may have hit stop) ──
+            if cancel_event and cancel_event.is_set():
+                raise asyncio.CancelledError("Cancelled by user")
+
             skill = self._registry.get_skill(skill_id)
             try:
                 from src.config.database import get_db

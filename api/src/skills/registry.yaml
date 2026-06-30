@@ -159,7 +159,7 @@
 - id: "gl.transaction_detail"
   category: "GL"
   name: "Journal / Transaction Detail"
-  description: "Use when the user asks to see the journal entry, postings, or double-entry detail for a specific transaction. Shows each account with debit/credit amounts."
+  description: "Use when the user asks to see a specific GL transaction, journal entry, or double-entry postings. Shows debits and credits per account. IMPORTANT: This is for GENERAL LEDGER transactions ONLY — NOT for invoices. If the user asks about 'invoices', use invoice.list instead. Invoices and GL transactions are DIFFERENT things."
   inputSchema:
     type: object
     properties:
@@ -424,7 +424,7 @@
 - id: "invoice.list"
   category: "Invoice"
   name: "List Invoices"
-  description: "Use when the user wants to see all invoices or filter by status."
+  description: "Use when the user asks about INVOICES specifically — 'show me invoices', 'do I have any invoices', 'list unpaid invoices'. This returns SALES INVOICES (customer billing documents), NOT general ledger transactions. If the user asks about 'transactions', 'entries', or 'all activity', use gl.list_transactions instead. These are DIFFERENT domains. DO NOT call gl.transaction_detail when the user says 'invoices'."
   inputSchema:
     type: object
     properties:
